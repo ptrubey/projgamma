@@ -19,7 +19,6 @@ from scipy.stats import norm as normal
 from scipy.stats import uniform
 
 from genpareto import gpd_fit
-from slice import skip_univariate_slice_sample, univariate_slice_sample
 
 # Tuples for storing priors
 
@@ -291,14 +290,6 @@ def pt_logd_mixprojgamma(aY, aAlpha, aBeta, nu):
     scratch += logpi[None]
     np.exp(scratch, out = scratch)
     return np.log(scratch.sum(axis = -1))
-    # asum = aAlpha.sum(axis = -1)
-    # ysum = aY.sum(axis = -1)
-    # scratch -= loggamma(aAlpha).sum(axis = -1)
-    # scratch += np.einsum('n...d,...tjd->n...tj', np.log(aY), aAlpha - 1)
-    # scratch += loggamma(aAlpha.sum(axis = -1))
-    # scratch -= np.einsum('...tj,...n->n...tj', asum, np.log(ysum))
-    # np.exp(scratch, out = scratch)
-    # return np.log(np.einsum('ntj,tj->nt', scratch, pi))
 
 ## functions relating to gamma density
 
@@ -915,10 +906,6 @@ def sample_alpha_1_mh(curr_alpha_1, y_1, prior, proposal_sd = 0.3):
     else:
         return curr_alpha_1
 
-def sample_alpha_1_slice(curr_alpha_1, y_1, prior, increment_size = 2.):
-    f = lambda log_alpha_1: log_post_log_alpha_1(log_alpha_1, y_1, prior)
-    return exp(univariate_slice_sample(f, log(curr_alpha_1), increment_size))
-
 def log_post_log_alpha_k(log_alpha, y, prior_a, prior_b):
     """ Log posterior for log-alpha assuming a gamma distribution,
     beta integrated out of the posterior. """
@@ -950,10 +937,6 @@ def sample_alpha_k_mh(curr_alpha_k, y_k, prior_a, prior_b, proposal_sd = 0.3):
         return exp(prop_log_alpha_k)
     else:
         return curr_alpha_k
-
-def sample_alpha_k_slice(curr_alpha_k, y_k, prior_a, prior_b, increment_size = 2.):
-    f = lambda log_alpha_k: log_post_log_alpha_k(log_alpha_k, y_k, prior_a, prior_b)
-    return exp(univariate_slice_sample(f, log(curr_alpha_k), increment_size))
 
 def sample_beta_fc(alpha, y, prior):
     aa = len(y) * alpha + prior.a
@@ -1001,5 +984,8 @@ def logd_gamma(Y, alpha, beta):
     out += (alpha - 1) * np.log(Y)
     out -= beta * Y
     return out
+
+if __name__ == '__main__':
+    pass
 
 # EOF

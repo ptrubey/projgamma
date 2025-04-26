@@ -133,39 +133,6 @@ def energy_score(prediction, target):
     return 0.5 * PR.mean() - GF.mean()
 
 if __name__ == '__main__':
-    import glob, os
-    base_path = './output'
-    base_models = ['fmix','mpg','dpmpg','dppgln','dp']
-
-    Posterior = namedtuple('Posterior','path type name crps hell tv')
-    posteriors = []
-
-    for base_model in base_models:
-        realized_models = glob.glob(os.path.join(base_path, base_model, 'postpred_*.csv'))
-        emp = to_hypercube(
-            pd.read_csv(os.path.join(base_path, base_model, 'empirical.csv')).values
-            )
-
-        for realized_model in realized_models:
-            pp = to_hypercube(pd.read_csv(realized_model).values)
-            posteriors.append(
-                Posterior(
-                    realized_model,
-                    base_model,
-                    os.path.splitext(os.path.split(realized_model)[1])[0],
-                    # np.nan, # kullbeck_liebler_divergence(emp, pp),
-                    energy_score(emp, pp),
-                    hellinger_distance(emp, pp),
-                    total_variation_distance(emp, pp),
-                    )
-                )
-
-    print_string = '{}:{} : crps {}, Hellinger {}, TV {}'
-    for post in posteriors:
-        print(print_string.format(post.type, post.name, post.crps, post.hell, post.tv))
-    df = pd.DataFrame([posterior[1:] for posterior in posteriors],
-                        columns = ('type','name','crps','hellinger','tv'))
-    df.to_csv('./output/distance.csv')
+    pass
 
 # EOF
-#cython: boundscheck=False, wraparound=False, nonecheck=False
