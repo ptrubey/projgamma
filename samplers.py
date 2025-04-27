@@ -14,22 +14,22 @@ DirichletProcessSampler assumes the existence of:
 """
 import time
 import numpy as np
+import numpy.typing as npt
 np.seterr(divide = 'raise', invalid = 'raise')
 from numpy.random import beta, uniform, gamma
 from scipy.special import loggamma, betaln, softmax
 from collections import namedtuple
 import math
 import warnings
-# rng = np.random.default_rng(seed = inr(time.time())
 
-# set_num_threads(4)
+from numpy.typing import NDArray
 
 EPS = np.finfo(float).eps
 MAX = np.finfo(float).max
 
 GEMPrior = namedtuple('GEMPrior', 'discount concentration')
 
-def bincount2D_vectorized(arr, m):
+def bincount2D_vectorized(arr : npt.NDArray[np.int64], m : int):
     """
     code from stackoverflow:
         https://stackoverflow.com/questions/46256279    
@@ -43,15 +43,23 @@ def bincount2D_vectorized(arr, m):
     return np.bincount(arr_offs.ravel(), minlength=arr.shape[0] * m).reshape(-1, m)
 
 class BaseSampler(object):
+    print_string_before = '\rSampling 0% Completed'
     print_string_during = '\rSampling {:.1%} Completed in {}'
     print_string_after = '\rSampling 100% Completed in {}'
+    curr_iter : int = None
+    start_time : float = None
 
+    def initialize_sampler(self, ns : int) -> None:
+        raise NotImplementedError('Replace me!')
+    def iter_sample(self) -> None:
+        raise NotImplementedError('Replace me!')
+    
     @property
-    def time_elapsed_numeric(self):
+    def time_elapsed_numeric(self) -> float:
         return time.time() - self.start_time
 
     @property
-    def time_elapsed(self):
+    def time_elapsed(self) -> str:
         """ returns current time elapsed since sampling start in human readable format """
         elapsed = self.time_elapsed_numeric
         if elapsed < 60:
@@ -62,18 +70,25 @@ class BaseSampler(object):
             return '{:.2f} Hours'.format(elapsed / 3600)
         pass
 
-    def sample(self, ns, verbose = False):
+    def sample(
+            self, 
+            ns : int, 
+            verbose : bool = False,
+            print_interval : int = 100,
+            ) -> None:
         """ Run the Sampler """
         self.initialize_sampler(ns)
         self.start_time = time.time()
         
         if verbose:
-            print('\rSampling 0% Completed', end = '')
+            print(self.print_string_before, end = '')
 
         while (self.curr_iter < ns):
-            if (self.curr_iter % 100) == 0:
-                ps = self.print_string_during.format(self.curr_iter / ns, self.time_elapsed)
-                if verbose:
+            if verbose:
+                if (self.curr_iter % print_interval) == 0:
+                    ps = self.print_string_during.format(
+                        self.curr_iter / ns, self.time_elapsed,
+                        )
                     print(ps.ljust(80), end = '')
             self.iter_sample()
         
@@ -82,26 +97,30 @@ class BaseSampler(object):
             print(ps)
         return
 
-class DirichletProcessSampler(BaseSampler):
+class CRPSampler(BaseSampler):
     print_string_during = '\rSampling {:.1%} Completed in {}, {} Clusters'
     print_string_after  = '\rSampling 100% Completed in {}, {} Clusters Avg.'
+
+    @property
+    def curr_delta(self) -> npt.NDArray[np.int32]:
+        raise NotImplementedError('Replace me!')
     
     @property
-    def curr_cluster_count(self):
+    def curr_cluster_count(self) -> int:
         """ Returns current cluster count """
         return self.curr_delta.max() + 1
     
-    def average_cluster_count(self, ns):
+    def average_cluster_count(self, ns : int) -> float:
         acc = self.samples.delta[(ns//2):].max(axis = 1).mean() + 1
         return '{:.2f}'.format(acc)
 
-    def sample(self, ns, verbose = False):
+    def sample(self, ns : int, verbose : bool = False):
         """ Run the sampler """
         self.initialize_sampler(ns)
         self.start_time = time.time()
         
         if verbose:
-            print('\rSampling 0% Completed', end = '')
+            print(self.print_string_before, end = '')
         
         while (self.curr_iter < ns):
             if (self.curr_iter % 100) == 0:
@@ -117,7 +136,7 @@ class DirichletProcessSampler(BaseSampler):
             print(ps)
         return
 
-class StickBreakingSampler(DirichletProcessSampler):
+class StickBreakingSampler(CRPSampler):
     @property
     def curr_cluster_count(self):
         return (np.bincount(self.curr_delta) > 0).sum()
@@ -196,7 +215,11 @@ def pt_dp_sample_cluster_crp8(delta, log_likelihood, prob, eta):
             cand_cluster_state[temps, delta.T[n]] = False
     return
 
-def dp_sample_chi_bgsb(delta, eta, J):
+def dp_sample_chi_bgsb(
+        delta : npt.NDArray[np.int32], 
+        eta : float, 
+        J : int,
+        ) -> npt.NDArray[np.float64]:
     '''
     args: 
         delta : (N)    : current cluster assignment
@@ -212,7 +235,11 @@ def dp_sample_chi_bgsb(delta, eta, J):
         )
     return chi
 
-def pt_dp_sample_chi_bgsb(delta, eta, J):
+def pt_dp_sample_chi_bgsb(
+        delta : npt.NDArray[np.int32],
+        eta : npt.NDArray[np.float64], 
+        J : int,
+        ) -> npt.NDArray[np.float64]:
     """
     Args: 
         delta : (T, N)
@@ -222,11 +249,6 @@ def pt_dp_sample_chi_bgsb(delta, eta, J):
         chi   : (T, J)
     """
     clustcount = bincount2D_vectorized(delta, J)
-    # chi = beta(
-    #     a = 1 + clustcount,
-    #     b = eta[:,None] + clustcount[:,::-1].cumsum(axis = 1)[:,::-1] - clustcount,
-    #     )
-    # return chi
     A = gamma(1 + clustcount)
     B = gamma(eta[:,None] + clustcount[:,::-1].cumsum(axis = 1)[:,::-1] - clustcount)
     return np.exp(np.log(A) - np.log(A + B))
@@ -266,27 +288,6 @@ def pt_dp_sample_concentration_bgsb(chi, a, b):
 def dp_sample_cluster_bgsb(chi, log_likelihood):
     """
     Args:
-        chi            : (J)     : Random Weights (betas)  (should be J - 1; fixed here)
-        log_likelihood : (N x J) : log-likelihood of obs n under cluster j
-        eta ([type])   : Scalar
-    """
-    N, J = log_likelihood.shape
-    scratch = np.zeros((N,J))
-    with np.errstate(divide = 'ignore', invalid = 'ignore'):
-        scratch += np.log(np.hstack(chi[:,-1],(0,))) # scalar
-        scratch += np.hstack(((0,),np.log(1 - chi[:-1]).cumsum())) # (J)
-        scratch += log_likelihood # (N, J)
-        scratch[np.isnan(scratch)] = -np.inf
-        scratch -= scratch.max(axis = 1)[:,None]
-        np.exp(scratch, out = scratch)
-        np.cumsum(scratch, axis = 1, out = scratch)
-        scratch /= scratch[:-1][:,None]
-    delta = (uniform(size = (N))[:,None] > scratch).sum(axis = 1)
-    return delta
-
-def py_sample_cluster_bgsb_fixed(chi, log_likelihood):
-    """
-    Args:
         chi            : (J - 1  : Random Weights (betas)
         log_likelihood : (N x J) : log-likelihood of obs n under cluster j
         eta ([type])   : Scalar
@@ -311,34 +312,6 @@ def py_sample_cluster_bgsb(chi, log_likelihood):
 def pt_dp_sample_cluster_bgsb(chi, log_likelihood):
     """
     Args:
-        chi            : (T, J)
-        log_likelihood : (N x T x J)
-        eta ([type])   : (T)
-    """
-    N, T, J = log_likelihood.shape
-    scratch = np.zeros((N, T, J))
-    with np.errstate(divide = 'ignore', invalid = 'ignore'):
-        scratch += np.hstack(
-            (np.log(chi[:,:-1]), np.zeros((T,1))),
-            )[None] # Log Prior (part 1)
-        scratch += np.hstack(        # Log Prior (part 2)
-            (np.zeros((T,1)), np.log(1 - chi[:,:-1]).cumsum(axis = 1)),
-            )[None]
-        scratch += log_likelihood # log likelihood
-        scratch[np.isnan(scratch)] = -np.inf
-        scratch -= scratch.max(axis = 2)[:,:,None]
-        np.exp(scratch, out = scratch)
-        np.cumsum(scratch, axis = 2, out = scratch)
-        scratch /= scratch[:,:,-1][:,:,None]
-    # delta = (uniform(size = (N,T))[:,:,None] > scratch).sum(axis = 2).T
-    delta = (
-        (uniform(size = (N,T))[:,:,None] > scratch) @ np.ones(J, dtype = int)
-        ).T
-    return delta
-
-def pt_py_sample_cluster_bgsb_fixed(chi, log_likelihood):
-    """
-    Args:
         chi            : (T, J - 1)
         log_likelihood : (N x T x J)
     """
@@ -355,6 +328,9 @@ def pt_py_sample_cluster_bgsb_fixed(chi, log_likelihood):
         (uniform(size = (N,T,1)) > probs) @ np.ones(J, dtype = int)
         ).T
     return delta
+
+def pt_py_sample_cluster_bgsb(delta, log_likelihood):
+    return pt_dp_sample_cluster_bgsb(delta, log_likelihood)
 
 def pt_dp_sample_cluster(delta, log_likelihood, prob, eta):
     return pt_dp_sample_cluster_crp8(delta, log_likelihood, prob, eta)
@@ -453,18 +429,20 @@ def pt_logd_gem_mx_st_fixed(chi, disc, conc):
         ld -= betaln(a,b).sum(axis = 1)
     return ld
 
-class ParallelTemperingCRPSampler(DirichletProcessSampler):
+class ParallelTemperingCRPSampler(CRPSampler):
     @property
     def curr_cluster_count(self):
         return self.curr_delta[0].max() + 1
+    
     def average_cluster_count(self, ns):
         acc = self.samples.delta[(ns//2):,0].max(axis = 1).mean() + 1
         return '{:.2f}'.format(acc)
 
-class ParallelTemperingStickBreakingSampler(DirichletProcessSampler):
+class ParallelTemperingStickBreakingSampler(StickBreakingSampler):
     @property
     def curr_cluster_count(self):
         return (np.bincount(self.curr_delta[0]) > 0).sum()
+    
     def average_cluster_count(self, ns):
         cc = bincount2D_vectorized(
             self.samples.delta[(ns//2):,0], 
