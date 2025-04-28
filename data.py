@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 import numpy as np
+import numpy.typing as npt
 import sqlite3 as sql
 import pandas as pd
 import os
@@ -12,10 +13,12 @@ from cdf import ECDF
 EPS = np.finfo(float).eps
 MAX = np.finfo(float).max
 
-def category_matrix(cats):
-    """ Forms a Boolean Category Matrix
+def category_matrix(cats : list[int]) -> npt.NDArray[np.bool]:
+    """ 
+    Forms a Boolean Category Matrix
         dims = [(# categorical vars), sum(# categories per var)]
-    (c, sum(p_i)) """
+    (c, sum(p_i)) 
+    """
     if len(cats) == 0:
         return np.array([])
     catvec = np.hstack(list(np.ones(ncat) * i for i, ncat in enumerate(cats)))
@@ -23,22 +26,27 @@ def category_matrix(cats):
     return CatMat
 
 # modified to work on n-d arrays
-def euclidean_to_simplex(euc):
+def euclidean_to_simplex(euc : npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     """ projects R_+^d to S_1^{d-1} """
     return (euc + EPS) / (euc + EPS).sum(axis = -1)[...,None]
 
-def euclidean_to_hypercube(euc):
+        # self.pool = get_context('spawn').Pool(
+def euclidean_to_hypercube(euc : npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+    """ Project R_+^d to S_{\infty}^{d-1}"""
     V = (euc + EPS) / (euc + EPS).max(axis = -1)[...,None]
     V[V < EPS] = EPS
     return V
 
-def euclidean_to_psphere(euc, p = 10):
+def euclidean_to_psphere(euc : npt.NDArray[np.float64], p : int = 10) -> npt.NDArray[np.float64]:
+    """ Project R_+^d to S_p^{d-1} """
     Yp = (euc + EPS) / (((euc + EPS)**p).sum(axis = -1)**(1/p))[...,None]
     Yp[Yp < EPS] = EPS
     return Yp
 
-def euclidean_to_catprob(euc, catmat):
+def euclidean_to_catprob(euc : npt.NDArray[np.float64], catmat : npt.NDArray[np.bool]) -> npt.NDArray[np.float64]:
     """ 
+    Projects R_+^d to \prod_c S_1^{d_c -1}
+
     euc    : (n,s,d) or (s,d)
     catmat : (c,d)
     """
@@ -47,7 +55,7 @@ def euclidean_to_catprob(euc, catmat):
     pis = euc / neuc
     return pis
 
-def cluster_max_row_ids(series):
+def cluster_max_row_ids(series : npt.NDArray[np.float64]) -> npt.NDArray[np.int32]:
     nDat = series.shape[0]
     lst = []
     clu = np.empty(0, dtype = int)
@@ -63,16 +71,20 @@ def cluster_max_row_ids(series):
     else:
         if clu.shape[0] > 0:
             lst.append(clu)
+    max_ids = []
+    for cluster in lst:
+        max_ids.append(cluster[np.argmax(series[cluster])])
+    return np.array(max_ids)
     max_ids = np.empty(0, dtype = int)
     for cluster in lst:
         max_ids = np.append(max_ids, cluster[np.argmax(series[cluster])])
     return max_ids
 
 def compute_uni_gp_parms(
-        rv  : np.ndarray, 
+        rv  : npt.NDArray[np.float64], 
         q   : float,
-        ):
-    """ Compute Univariate GP parameters given quantile"""
+        ) -> npt.NDArray[np.float64]:
+    """ Compute Univariate GP parameters given quantile (length 3) """
     b = np.quantile(rv, q)
     a, xi = gpd_fit(rv, b)
     return np.array((b,a,xi))

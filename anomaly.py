@@ -4,19 +4,18 @@ Implements classic anomaly detection algorithms, as well as
 custom anomaly detection algorithms for extreme data.
 """
 # builtins imported as package
-import numpy as np, pandas as pd, matplotlib.pyplot as plt
-import re, os, argparse, glob, gc
+import numpy as np
+import numpy.typing as npt
+import pandas as pd
+import matplotlib.pyplot as plt
 # builtins explicitly imported
-from multiprocessing import pool as mcpool, cpu_count, Pool # get_context
-from scipy.integrate import trapezoid
-from scipy.special import gamma as gamma_func, gammaln
-from scipy.stats import gmean
-from numpy.random import gamma, choice
+from multiprocessing import pool as mcpool, cpu_count, Pool
+from scipy.special import gammaln
+from numpy.random import gamma
 from itertools import repeat
 from collections import defaultdict
 from functools import cached_property
 from time import sleep
-from math import ceil
 from sklearn.metrics import roc_auc_score, precision_recall_curve, auc
 from collections import defaultdict
 # Competing Anomaly Detection Algorithms
@@ -54,7 +53,10 @@ def chkarr(obj, attr):
     else:
         return False
 
-def metric_auc(scores, actual):
+def metric_auc(
+        scores : npt.NDArray[np.float64], 
+        actual : npt.NDArray[np.bool],
+        ) -> tuple[float, float]:
     """  
     metric_auc(scores, actual)
     ---
@@ -94,21 +96,21 @@ class Anomaly(Projection):
 
     # Parallelism
     pool = None
-    def pools_open(self):
-        # self.pool = get_context('spawn').Pool(
+    def pools_open(self, cpu_prop : float = 0.75) -> None:
         self.pool = Pool(
-            processes = (3 * cpu_count()) // 4, 
+            processes = int(cpu_prop * cpu_count()),
             initializer = limit_cpu,
             )
         return
-    def pools_closed(self):
+    
+    def pools_closed(self) -> None:
         self.pool.close()
         self.pool.join()
         del self.pool
         return
     
     @property
-    def zeta_sigma(self):
+    def zeta_sigma(self) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
         zetas = np.array([
             zeta[delta] 
             for zeta, delta 
