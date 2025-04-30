@@ -1,5 +1,6 @@
 """ online updating of covariance matrices """
 import numpy as np
+import numpy.typing as npt
 from scipy import sparse
 EPS = np.finfo(float).eps
 
@@ -9,14 +10,14 @@ class OnlineCovariance(object):
         covariance, adapted from the documentation for:
         https://github.com/loli/dynstatcov    
     """
-    nCol = None
-    A = None
-    b = None
-    x = None
-    n = None 
-    Sigma = None
+    nCol : int = None
+    A : npt.NDArray[np.float64] = None
+    b : npt.NDArray[np.float64] = None
+    x : npt.NDArray[np.float64] = None
+    n : int = None 
+    Sigma : npt.NDArray[np.float64] = None
 
-    def update(self, x):
+    def update(self, x : npt.NDArray[np.float64]) -> None:
         """ 
         x : (d)
         """
@@ -33,7 +34,7 @@ class OnlineCovariance(object):
                 ) + np.eye(self.nCol) * 1e-5
         return
 
-    def __init__(self, nCol, init_diag = 1e-6):
+    def __init__(self, nCol : int, init_diag : float = 1e-6):
         self.nCol = nCol
         self.Sigma = np.eye(nCol) * init_diag
         self.A = np.zeros((nCol, nCol))
@@ -43,8 +44,9 @@ class OnlineCovariance(object):
         return
 
 class TemperedOnlineCovariance(OnlineCovariance):
-    def update(self, x):
+    def update(self, x : npt.NDArray[np.float64]) -> None:
         """" x : (t, d) """
+        assert len(x.shape) == 2
         self.A += np.einsum('tj,tl->tjl', x, x)
         self.b += x
         self.n += 1 
@@ -53,13 +55,11 @@ class TemperedOnlineCovariance(OnlineCovariance):
         self.Sigma += self.A
         self.Sigma -= np.einsum('tj,tl->tjl', self.xbar, self.b)
         self.Sigma -= np.einsum('tj,tl->tjl', self.b, self.xbar)
-        self.Sigma += self.n * np.einsum(
-            'tj,tl->tjl', self.xbar, self.xbar,
-            )
+        self.Sigma += self.n * np.einsum('tj,tl->tjl', self.xbar, self.xbar)
         self.Sigma /= self.n
         return
     
-    def __init__(self, nTemp, nCol):
+    def __init__(self, nTemp : int, nCol : int):
         self.nTemp, self.nCol = nTemp, nCol
         self.Sigma = np.empty((nTemp, nCol, nCol))
         self.A = np.zeros((nTemp, nCol, nCol))
@@ -69,14 +69,14 @@ class TemperedOnlineCovariance(OnlineCovariance):
         return
 
 class PerObsOnlineCovariance(OnlineCovariance):
-    c_Sigma = None
-    c_xbar  = None
-    c_n     = None
-    c_A     = None
-    c_b     = None
-    c_xbar  = None
+    c_Sigma : npt.NDArray[np.float64] = None
+    c_xbar  : npt.NDArray[np.float64] = None
+    c_n     : npt.NDArray[np.int32] = None
+    c_A     : npt.NDArray[np.float64] = None
+    c_b     : npt.NDArray[np.float64] = None
+    c_xbar  : npt.NDArray[np.float64] = None
 
-    def cluster_covariance(self, delta):
+    def cluster_covariance(self, delta : npt.NDArray[np.int32]) -> npt.NDArray[np.float64]:
         if self.n <= 300:
             return self.c_Sigma
         
@@ -89,7 +89,7 @@ class PerObsOnlineCovariance(OnlineCovariance):
             self.c_n[delta[n]] += self.n
             self.c_A[delta[n]] += self.A[n]
             self.c_b[delta[n]] += self.b[n]
-        self.c_xbar = self.c_b / (self.c_n[:,None] + EPS)
+        self.c_xbar[:] = self.c_b / (self.c_n[:,None] + EPS)
         self.c_Sigma += self.c_A
         self.c_Sigma -= self.c_xbar[:,None] * self.c_b[:,:,None]
         self.c_Sigma -= self.c_b[:,None] * self.c_xbar[:,:,None]
@@ -100,14 +100,20 @@ class PerObsOnlineCovariance(OnlineCovariance):
         self.c_Sigma += np.eye(self.nCol)[None,:] * 1e-9
         return self.c_Sigma
     
-    def update(self, x):
+    def update(self, x : npt.NDArray[np.float64]) -> None:
         """ x : (n, d) """
         self.A += x[:,:,None] * x[:,None,:] 
         self.b += x
         self.n += 1
         return
     
-    def __init__(self, nDat, nCol, nClust, init_diag = 1e-6):
+    def __init__(
+            self, 
+            nDat : int, 
+            nCol : int, 
+            nClust : int, 
+            init_diag : float = 1e-6,
+            ):
         self.nDat, self.nCol, self.nClust = nDat, nCol, nClust
         self.A = np.zeros((self.nDat, self.nCol, self.nCol))
         self.b = np.zeros((self.nDat, self.nCol))
@@ -122,14 +128,14 @@ class PerObsOnlineCovariance(OnlineCovariance):
         return
 
 class PerObsTemperedOnlineCovariance(OnlineCovariance):
-    c_Sigma = None
-    c_xbar  = None
-    c_n     = None
-    c_A     = None
-    c_b     = None
-    c_xbar  = None
+    c_Sigma : npt.NDArray[np.float64] = None
+    c_xbar  : npt.NDArray[np.float64] = None
+    c_n     : npt.NDArray[np.int32] = None
+    c_A     : npt.NDArray[np.float64] = None
+    c_b     : npt.NDArray[np.float64] = None
+    c_xbar  : npt.NDArray[np.float64] = None
 
-    def cluster_covariance(self, delta):
+    def cluster_covariance(self, delta : npt.NDArray[np.int32]) -> npt.NDArray[np.float64]:
         if self.n <= 300:
             return self.c_Sigma
         
@@ -153,7 +159,7 @@ class PerObsTemperedOnlineCovariance(OnlineCovariance):
         self.c_Sigma += np.eye(self.nCol)[None,None,:] * 1e-9
         return self.c_Sigma
 
-    def cluster_covariance2(self, dmat):
+    def cluster_covariance2(self, dmat : npt.NDArray[np.bool_]) -> npt.NDArray[np.float64]:
         """
         dmat : np.array((nDat, nTemp, nClust))          (cluster indicator; true or false)
 
@@ -179,7 +185,7 @@ class PerObsTemperedOnlineCovariance(OnlineCovariance):
         self.c_Sigma /= (self.c_n[:,:,None,None] + EPS)
         return self.c_Sigma
 
-    def cluster_covariance_old(self, delta):
+    def cluster_covariance_old(self, delta : npt.NDArray[np.int32]) -> npt.NDArray[np.float64]:
         """ 
         Combines Covariance Matrices for all elements in cluster 
         adapted from: https://tinyurl.com/onlinecovariance
@@ -216,22 +222,21 @@ class PerObsTemperedOnlineCovariance(OnlineCovariance):
         self.c_Sigma += np.eye(self.nCol)[None,None,:] * 1e-9
         return self.c_Sigma
 
-    def update(self, x):
+    def update(self, x : npt.NDArray[np.float64]) -> None:
         """ x : (n, t, d) """
-        # self.A += np.einsum('ntj,ntl->ntjl', x, x)
         self.A += x[:,:,:,None] * x[:,:,None,:] 
         self.b += x
         self.n += 1
-        # self.xbar[:] = self.b / self.n
-        # self.Sigma[:] = 0.
-        # self.Sigma += self.A
-        # self.Sigma -= np.einsum('ntj,ntl->ntjl', self.xbar, self.b)
-        # self.Sigma -= np.einsum('ntj,ntl->ntjl', self.b, self.xbar)
-        # self.Sigma += self.n * np.einsum('ntj,ntl->ntjl', self.xbar, self.xbar)
-        # self.Sigma /= self.n
         return
     
-    def __init__(self, nTemp, nDat, nCol, nClust = None, init_diag = 1e-6):
+    def __init__(
+            self, 
+            nTemp : int, 
+            nDat : int, 
+            nCol : int, 
+            nClust : int = None, 
+            init_diag : float = 1e-6,
+            ):
         # regular
         self.nTemp, self.nDat, self.nCol = nTemp, nDat, nCol
         self.temps = np.arange(self.nTemp)
@@ -252,36 +257,6 @@ class PerObsTemperedOnlineCovariance(OnlineCovariance):
         return
 
 if __name__ == "__main__":
-    # from numpy.linalg import cholesky
-    # from numpy.random import normal
-
-    # starting_cov = np.array([3,0.3,-1.3,0.3,2,0.7,-1.3,0.7,2.5]).reshape(3,3)
-    # starting_cho = cholesky(starting_cov)
-
-    # z = normal(size = (1000, 3))
-    # x = (starting_cho @ z.T).T
-    # ccovs = np.empty((1000, 3, 3))
-    # covs = np.empty((1000, 3, 3))
-    # means = np.empty((1000, 3))
-    # cmeans = np.empty((1000, 3))
-    # covs[0] = 0.
-    # means[0] = 0.
-
-    # sigma = OnlineCovariance(3)
-
-    # for i in range(1000):
-    #     sigma.update(x[i])
-    #     covs[i] = sigma.Sigma
-    #     if i > 1:
-    #         ccovs[i] = np.cov(x[:(i+1)].T) * i/(i+1)
-    # A = np.ones((50, 5, 7,7))
-    # dmat = np.zeros((5, 50, 30))
-    # for t in range(5):
-    #     for n in range(50):
-    #         dmat[t,n,sample(range(30),1)[0]] = 1
-    # T1 = np.einsum('ntcd,tnj->tjcd', A, dmat)
-    # # T2 = np.tensordot(A, axes = (0))
-    # T2 = np.matmul(np.swapaxes())
     pass
 
 # EOF

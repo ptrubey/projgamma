@@ -13,7 +13,7 @@ from cdf import ECDF
 EPS = np.finfo(float).eps
 MAX = np.finfo(float).max
 
-def category_matrix(cats : list[int]) -> npt.NDArray[np.bool]:
+def category_matrix(cats : list[int]) -> npt.NDArray[np.bool_]:
     """ 
     Forms a Boolean Category Matrix
         dims = [(# categorical vars), sum(# categories per var)]
@@ -43,7 +43,7 @@ def euclidean_to_psphere(euc : npt.NDArray[np.float64], p : int = 10) -> npt.NDA
     Yp[Yp < EPS] = EPS
     return Yp
 
-def euclidean_to_catprob(euc : npt.NDArray[np.float64], catmat : npt.NDArray[np.bool]) -> npt.NDArray[np.float64]:
+def euclidean_to_catprob(euc : npt.NDArray[np.float64], catmat : npt.NDArray[np.bool_]) -> npt.NDArray[np.float64]:
     """ 
     Projects R_+^d to \prod_c S_1^{d_c -1}
 

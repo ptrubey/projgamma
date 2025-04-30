@@ -1,8 +1,9 @@
 import numpy as np
+import numpy.typing as npt
 from scipy.optimize import minimize
 from itertools import repeat
 
-def gpd_fit(data, threshold):
+def gpd_fit(data : npt.NDArray[np.float64], threshold : float) -> npt.NDArray[np.float64]:
     " fits the GPD parameters for a given threshold "
     diff = data - threshold
     excess = diff[diff > 0]
@@ -14,7 +15,7 @@ def gpd_fit(data, threshold):
     theta_mat = np.array(list(zip(xi0, repeat(sc0))))
 
     # negative log-likelihood under gen pareto model
-    def gpd_neg_log_lik(theta):
+    def gpd_neg_log_lik(theta : npt.NDArray[np.float64]) -> float:
         sc, xi = theta
         cond1 = sc <= 0.
         cond2 = (xi <= 0.) and (excess.max() > (-sc / xi))
@@ -25,7 +26,7 @@ def gpd_fit(data, threshold):
             return len(excess) * np.log(sc) + (1 + xi) * y.sum()
     
     # wrapper for minimize function
-    def gpd_nll_wrapper(theta):
+    def gpd_nll_wrapper(theta : npt.NDArray[np.float64]) -> float:
         fit = minimize(gpd_neg_log_lik, theta, method = 'L-BFGS-B')
         return np.hstack((fit.x, gpd_neg_log_lik(fit.x)))
 
@@ -38,6 +39,5 @@ def gpd_fit(data, threshold):
         print('Model Fitting Unsuccessful')
     # return those fitted parameters
     return res[res.T[2].argmin(),:2]
-
 
 # EOF

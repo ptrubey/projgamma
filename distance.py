@@ -1,12 +1,14 @@
 # Compute Distance / Divergence between Distributions
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
+from typing import Any
 from collections import defaultdict, namedtuple
 from math import log, sqrt
 from data import to_hypercube
 from sklearn.metrics import pairwise_distances
 
-def check_shape(data1,data2):
+def check_shape(data1 : npt.NDArray[Any], data2 : npt.NDArray[Any]) -> None:
     try:
         data1.shape[1] == data2.shape[1]
     except AssertionError:
@@ -14,7 +16,10 @@ def check_shape(data1,data2):
         raise
     return
 
-def make_density_dictionary_hypercube(data, resolution):
+def make_density_dictionary_hypercube(
+        data : npt.NDArray[np.float64], 
+        resolution : int,
+        ) -> defaultdict[float]:
     n = data.shape[0]
     maxcol = np.argmax(data, axis = 1)
     _data = np.array([np.delete(data[i],maxcol[i]) for i in range(n)])
@@ -25,7 +30,10 @@ def make_density_dictionary_hypercube(data, resolution):
         d[tuple(_dint_[iter].tolist())] += 1/n
     return d
 
-def make_density_dictionary(data, resolution):
+def make_density_dictionary(
+        data : npt.NDArray[np.float64], 
+        resolution : float,
+        ) -> defaultdict[float]:
     dint = np.ceil(data * resolution).astype(int)
     n = data.shape[0]
     d = defaultdict(float)
@@ -33,7 +41,11 @@ def make_density_dictionary(data, resolution):
         d[tuple(dint[iter].tolist())] += 1/n
     return d
 
-def kullbeck_liebler_divergence(data1, data2, resolution = 4):
+def kullbeck_liebler_divergence(
+        data1 : npt.NDArray[np.float64], 
+        data2 : npt.NDArray[np.float64], 
+        resolution : int = 4,
+        ) -> float:
     check_shape(data1,data2)
     d1 = make_density_dictionary_hypercube(data1, resolution)
     d2 = make_density_dictionary_hypercube(data2, resolution)
@@ -45,7 +57,11 @@ def kullbeck_liebler_divergence(data1, data2, resolution = 4):
 
     return divergence
 
-def hellinger_distance(data1, data2, resolution = 4):
+def hellinger_distance(
+        data1 : npt.NDArray[np.float64], 
+        data2 : npt.NDArray[np.float64], 
+        resolution : int = 4,
+        ) -> float:
     check_shape(data1, data2)
     d1 = make_density_dictionary_hypercube(data1, resolution)
     d2 = make_density_dictionary_hypercube(data2, resolution)
@@ -60,7 +76,11 @@ def hellinger_distance(data1, data2, resolution = 4):
 
     return sqrt(sqdist) / sqrt(2)
 
-def total_variation_distance(data1, data2, resolution = 4):
+def total_variation_distance(
+        data1 : npt.NDArray[np.float64], 
+        data2 : npt.NDArray[np.float64], 
+        resolution : int = 4
+        ) -> float:
     check_shape(data1, data2)
     d1 = make_density_dictionary_hypercube(data1, resolution)
     d2 = make_density_dictionary_hypercube(data2, resolution)
@@ -74,7 +94,11 @@ def total_variation_distance(data1, data2, resolution = 4):
 
     return m
 
-def cdf_distance(data1, data2, resolution = 10):
+def cdf_distance(
+        data1 : npt.NDArray[np.float64], 
+        data2 : npt.NDArray[np.float64], 
+        resolution : int = 10,
+        ) -> float:
     """
     Contiuous Rank Probability Score - discretized
     """
@@ -114,7 +138,10 @@ def cdf_distance(data1, data2, resolution = 10):
         prev_bins_below = bins_below + 1
     return sqrt(wassenstein2)
 
-def energy_score(prediction, target):
+def energy_score(
+        prediction : npt.NDArray[np.float64], 
+        target : npt.NDArray[np.float64],
+        ) -> float:
     """ Computes Energy Score (Multivariate CRPS) between target and
         posterior predictive density """
     nSamp, nDat, nCol = prediction.shape
@@ -123,8 +150,6 @@ def energy_score(prediction, target):
     PR = np.empty(nDat)
 
     for i in range(nDat):
-        #diff = prediction[:,i] - target[i]
-        #GF[i] = np.sqrt((diff * diff).sum(axis = 1)).mean()
         GF[i] = pairwise_distances(prediction[:,i], target[i].reshape(1,-1)).mean()
 
     for i in range(nDat):

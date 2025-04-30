@@ -1,9 +1,10 @@
-from numpy.random import choice, gamma, beta, uniform, normal, multinomial
+from numpy.random import choice, gamma, uniform, normal
 from scipy.stats import invwishart
 from numpy.linalg import cholesky, inv
 from collections import namedtuple
 from itertools import repeat, chain
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 import os
 import pickle
@@ -61,34 +62,42 @@ class Samples_(Samples):
 
 class Chain(ParallelTemperingStickBreakingSampler, Projection):
     @property
-    def curr_zeta(self):
+    def curr_zeta(self) -> npt.NDArray[np.float64]:
         return self.samples.zeta[self.curr_iter]
     @property
-    def curr_mu(self):
+    def curr_mu(self) -> npt.NDArray[np.float64]:
         return self.samples.mu[self.curr_iter]
     @property
-    def curr_Sigma(self):
+    def curr_Sigma(self) -> npt.NDArray[np.float64]:
         return self.samples.Sigma[self.curr_iter]
     @property
-    def curr_delta(self):
+    def curr_delta(self) -> npt.NDArray[np.int32]:
         return self.samples.delta[self.curr_iter]
     @property
-    def curr_chi(self):
+    def curr_chi(self) -> npt.NDArray[np.float64]:
         return self.samples.chi[self.curr_iter]
     
     # Adaptive Metropolis Placeholders
-    am_Sigma  = None
-    am_scale  = None
-    max_clust_count = None
-    swap_attempts = None
-    swap_succeeds = None
+    am_Sigma : PerObsTemperedOnlineCovariance = None
+    am_scale : float = None
+    max_clust_count : int = None
+    swap_attempts : npt.NDArray[np.int32] = None
+    swap_succeeds : npt.NDArray[np.int32] = None
 
-    def sample_delta(self, chi, zeta):
+    def sample_delta(
+            self, 
+            chi : npt.NDArray[np.float64], 
+            zeta : npt.NDArray[np.float64],
+            ) -> npt.NDArray[np.float64]:
         log_likelihood = self.log_delta_likelihood(zeta)
         delta = pt_py_sample_cluster_bgsb(chi, log_likelihood)
         return delta
 
-    def sample_zeta_new(self, mu, Sigma_chol):
+    def sample_zeta_new(
+            self, 
+            mu : npt.NDArray[np.float64], 
+            Sigma_chol : npt.NDArray[np.float64],
+            ) -> npt.NDArray[np.float64]:
         """ Sample new zetas as log-normal (sample normal, then exponentiate) """
         sizes = (self.nTemp, self.max_clust_count, self.tCol)
         out = np.empty(sizes)
@@ -97,11 +106,21 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
         np.exp(out, out=out)
         return out
 
-    def am_covariance_matrices(self, delta, index):
+    def am_covariance_matrices(
+            self, 
+            delta : npt.NDArray[np.int32], 
+            index : npt.NDArray[np.int32],
+            ) -> npt.NDArray[np.float64]:
         return self.am_Sigma.cluster_covariance(delta)[index]
-        # return self.am_Sigma.cluster_covariance3(delta)[index]
 
-    def sample_zeta(self, zeta, delta, mu, Sigma_chol, Sigma_inv):
+    def sample_zeta(
+            self, 
+            zeta : npt.NDArray[np.float64], 
+            delta : npt.NDArray[np.int32], 
+            mu : npt.NDArray[np.float64], 
+            Sigma_chol : npt.NDArray[np.float64], 
+            Sigma_inv : npt.NDArray[np.float64],
+            ) -> npt.NDArray[np.float64]:
         """
         zeta      : (t x J x D)
         delta     : (t x n)
@@ -142,7 +161,12 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
         zcurr[keep] = zcand[keep]
         return zcurr
 
-    def sample_Sigma(self, zeta, mu, extant_clusters):
+    def sample_Sigma(
+            self, 
+            zeta : npt.NDArray[np.float64], 
+            mu : npt.NDArray[np.float64], 
+            extant_clusters : npt.NDArray[np.bool_],
+            ) -> npt.NDArray[np.float64]:
         n = extant_clusters.sum(axis = 1)
         diff = (np.log(zeta) - mu[:,None,:]) * extant_clusters[:,:,None]
         C = np.einsum('tjd,tje->tde', diff, diff)
@@ -153,7 +177,12 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
             out[i] = invwishart.rvs(df = _nu[i], scale = _psi[i])
         return out
 
-    def sample_mu(self, zeta, Sigma_inv, extant_clusters):
+    def sample_mu(
+            self, 
+            zeta : npt.NDArray[np.float64], 
+            Sigma_inv : npt.NDArray[np.float64], 
+            extant_clusters : npt.NDArray[np.bool_],
+            ) -> npt.NDArray[np.float64]:
         n = extant_clusters.sum(axis = 1)
         assert np.all(zeta[extant_clusters] > 0)
         with np.errstate(divide = 'ignore', invalid = 'ignore'):
@@ -174,7 +203,10 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
         out += _mu
         return out
 
-    def sample_chi(self, delta):
+    def sample_chi(
+            self, 
+            delta : npt.NDArray[np.int32],
+            ) -> npt.NDArray[np.float64]:
         chi = pt_py_sample_chi_bgsb(
             delta,
             *self.priors.chi,
@@ -182,7 +214,10 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
             )
         return chi
 
-    def log_delta_likelihood(self, zeta):
+    def log_delta_likelihood(
+            self, 
+            zeta : npt.NDArray[np.float64],
+            ) -> npt.NDArray[np.float64]:
         out = np.zeros((self.nDat, self.nTemp, self.max_clust_count))
         with np.errstate(divide = 'ignore', invalid = 'ignore'):
             pt_logd_projgamma_my_mt_inplace_unstable(
@@ -198,7 +233,12 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
         np.nan_to_num(out, False, -np.inf)
         return out
     
-    def log_zeta_likelihood(self, zeta, delta, delta_ind_mat):
+    def log_zeta_likelihood(
+            self, 
+            zeta : npt.NDArray[np.float64], 
+            delta : npt.NDArray[np.int32], 
+            delta_ind_mat : npt.NDArray[np.bool_],
+            ) -> npt.NDArray[np.float64]:
         out = np.zeros((self.nTemp, self.max_clust_count))
         zetas = zeta[
             self.temp_unravel, delta.ravel(),
@@ -225,7 +265,13 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
                 )
         return out
     
-    def log_logzeta_prior(self, logzeta, mu, Sigma_chol, Sigma_inv):
+    def log_logzeta_prior(
+            self, 
+            logzeta : npt.NDArray[np.float64], 
+            mu : npt.NDArray[np.float64], 
+            Sigma_chol : npt.NDArray[np.float64], 
+            Sigma_inv : npt.NDArray[np.float64],
+            ) -> npt.NDArray[np.float64]:
         """
         logzeta   :  (t, j, d)
         mu        :  (t, d)
@@ -233,7 +279,7 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
         """
         return pt_logd_mvnormal_mx_st(logzeta, mu, Sigma_chol, Sigma_inv)
 
-    def log_tempering_likelihood(self):
+    def log_tempering_likelihood(self) -> npt.NDArray[np.float64]:
         curr_zeta = self.curr_zeta[
             self.temp_unravel, self.curr_delta.ravel()
             ].reshape(self.nTemp, self.nDat, self.tCol)
@@ -252,7 +298,7 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
             out += pt_logd_pareto_paired_yt(self.data.R, curr_zeta[:,:,-1]).sum(axis = 1)
         return out
 
-    def log_tempering_prior(self):
+    def log_tempering_prior(self) -> npt.NDArray[np.float64]:
         out = np.zeros(self.nTemp)
         Sigma_cho = cholesky(self.curr_Sigma)
         Sigma_inv = inv(self.curr_Sigma)
@@ -268,7 +314,7 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
         out += logd_invwishart_ms(self.curr_Sigma, *self.priors.Sigma)
         return out
 
-    def initialize_sampler(self, ns):
+    def initialize_sampler(self, ns : int) -> None:
         # Samples
         self.samples = Samples(ns, self.nDat, self.tCol, self.nTemp, self.max_clust_count)
         self.samples.mu[0] = 0.
@@ -293,7 +339,7 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
         self.zeta_shape = (self.nTemp, self.nDat, self.tCol)
         return
 
-    def update_am_cov(self):
+    def update_am_cov(self) -> None:
         """ Online updating for Adaptive Metropolis Covariance per obsv. """
         lzeta = np.swapaxes(
             np.log(
@@ -308,7 +354,7 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
         self.am_Sigma.update(lzeta)
         return
 
-    def try_tempering_swap(self):
+    def try_tempering_swap(self) -> None:
         ci = self.curr_iter
         # declare log-likelihood, log-prior
         lpl = self.log_tempering_likelihood()
@@ -340,7 +386,7 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
                 self.samples.delta[ci][tt[1]].copy(), self.samples.delta[ci][tt[0]].copy()
         return
 
-    def iter_sample(self):
+    def iter_sample(self) -> None:
         # current cluster assignments; number of new candidate clusters
         delta = self.curr_delta.copy()
         zeta  = self.curr_zeta.copy()
@@ -379,7 +425,7 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
            self.try_tempering_swap()
         return
 
-    def write_to_disk(self, path, nBurn, nThin = 1):
+    def write_to_disk(self, path : str, nBurn : int, nThin : int = 1) -> None:
         folder = os.path.split(path)[0]
         if not os.path.exists(folder):
             os.mkdir(folder)
@@ -411,7 +457,7 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
             pickle.dump(out, file)
         return
     
-    def categorical_considerations(self):
+    def categorical_considerations(self) -> None:
         """ Builds the CatMat """
         self.CatMat = category_matrix(self.data.cats)
         return
@@ -488,7 +534,11 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
         return
 
 class Result(object):
-    def generate_posterior_predictive_gammas(self, n_per_sample = 1, m = 10):
+    def generate_posterior_predictive_gammas(
+            self, 
+            n_per_sample : int = 1, 
+            m : int = 10,
+            ) -> npt.NDArray[np.float64]:
         new_gammas = []
         njs = np.zeros(self.max_clust_count, dtype = int)
         ljs = np.zeros(self.max_clust_count)
@@ -506,7 +556,11 @@ class Result(object):
             new_gammas.append(gamma(shape = zeta))
         return np.vstack(new_gammas)
 
-    def generate_posterior_predictive_hypercube(self, n_per_sample = 1, m = 10):
+    def generate_posterior_predictive_hypercube(
+            self, 
+            n_per_sample : int = 1, 
+            m : int = 10,
+            ) -> npt.NDArray[np.float64]:
         gammas = self.generate_posterior_predictive_gammas(n_per_sample, m)
         # hypercube transformation for real variates
         hypcube = euclidean_to_hypercube(gammas[:,:self.nCol])
@@ -526,15 +580,13 @@ class Result(object):
         # stack hypercube and categorical variables side by side.
         return np.hstack([hypcube] + simplex_reverse[::-1])
 
-    def generate_posterior_predictive_spheres(self, n_per_sample):
+    def generate_posterior_predictive_spheres(self, n_per_sample : int) -> npt.NDArray[np.float64]:
         rhos = self.generate_posterior_predictive_gammas(n_per_sample)[:,self.nCol:(self.nCol + self.nCat)] # (s,D)
         CatMat = category_matrix(self.data.Cats) # (C,d)
         return euclidean_to_catprob(rhos, CatMat)
         
-    def generate_conditional_posterior_predictive_radii(self):
+    def generate_conditional_posterior_predictive_radii(self) -> npt.NDArray[np.float64]:
         """ r | zeta, V ~ Gamma(r | sum(zeta), sum(V)) """
-        # As = np.einsum('il->i', zeta[delta].T[:self.nCol].T)
-        # Bs = np.einsum('il->i', self.data.Yp)
         shapes = np.array([
             zeta[delta][:,:self.nCol]
             for delta, zeta
@@ -544,7 +596,7 @@ class Result(object):
         rs = gamma(shape = shapes, scale = 1 / rates)
         return rs
 
-    def generate_conditional_posterior_predictive_gammas(self):
+    def generate_conditional_posterior_predictive_gammas(self) -> npt.NDArray[np.float64]:
         """ rho | zeta, delta + W ~ Gamma(rho | zeta[delta] + W) """
         zetas = np.swapaxes(np.array([
             zeta[delta]
@@ -554,7 +606,7 @@ class Result(object):
         W = np.hstack((np.zeros((self.nDat, self.nCol)), self.data.W)) # (n,d)
         return gamma(shape = zetas + W[:,None,:])
 
-    def generate_conditional_posterior_predictive_spheres(self):
+    def generate_conditional_posterior_predictive_spheres(self) -> npt.NDArray[np.float64]:
         """ pi | zeta, delta = normalized rho
         currently discarding generated Y's, keeping latent pis
         """
@@ -565,7 +617,12 @@ class Result(object):
         pis = rhos / nrho
         return pis
 
-    def generate_new_conditional_posterior_predictive_spheres(self, Vnew, Wnew, Rnew):
+    def generate_new_conditional_posterior_predictive_spheres(
+            self, 
+            Vnew : npt.NDArray[np.float64], 
+            Wnew : npt.NDArray[np.bool_], 
+            Rnew : npt.NDArray[np.float64],
+            ) -> npt.NDArray[np.float64]:
         rhos   = self.generate_new_conditional_posterior_predictive_gammas(
             Vnew, Wnew, Rnew,
             )[:,:,self.nCol:]
@@ -575,30 +632,55 @@ class Result(object):
         pis    = rhos / nrho
         return pis
     
-    def generate_new_conditional_posterior_predictive_radii(self, Vnew, Wnew, Rnew):
+    def generate_new_conditional_posterior_predictive_radii(
+            self, 
+            Vnew : npt.NDArray[np.float64], 
+            Wnew : npt.NDArray[np.bool_], 
+            Rnew : npt.NDArray[np.float64],
+            ) -> npt.NDArray[np.float64]:
         znew = self.generate_new_conditional_posterior_predictive_zetas(Vnew, Wnew, Rnew)
-        radii = znew[:,:,:self.nCol].sum(axis = 2)
-        return gamma(radii)
+        shapes = znew[:,:,:self.nCol].sum(axis = 2)
+        return gamma(shapes)
     
-    def generate_new_conditional_posterior_predictive_gammas(self, Vnew, Wnew, Rnew):
+    def generate_new_conditional_posterior_predictive_gammas(
+            self, 
+            Vnew : npt.NDArray[np.float64], 
+            Wnew : npt.NDArray[np.int32], 
+            Rnew : npt.NDArray[np.float64],
+            ) -> npt.NDArray[np.float64]:
         znew = self.generate_new_conditional_posterior_predictive_zetas(Vnew, Wnew, Rnew)
         return gamma(znew)
 
-    def generate_new_conditional_posterior_predictive_hypercube(self, Vnew, Wnew, Rnew):
+    def generate_new_conditional_posterior_predictive_hypercube(
+            self, 
+            Vnew : npt.NDArray[np.float64], 
+            Wnew : npt.NDArray[np.bool_], 
+            Rnew : npt.NDArray[np.float64],
+            ) -> npt.NDArray[np.float64]:
         znew = self.generate_new_conditional_posterior_predictive_zetas(Vnew, Wnew, Rnew)
         Ypnew = euclidean_to_psphere(Vnew, 10)
         R = gamma(znew[:,:,:self.nCol].sum(axis = 2))
         G = gamma(znew[:,:,self.nCol:(self.nCol + self.nCat)])
         return euclidean_to_hypercube(np.hstack((R[:,:,None] * Ypnew, G)))
     
-    def generate_new_conditional_posterior_predictive_euclidean(self, Vnew, Wnew, Rnew):
+    def generate_new_conditional_posterior_predictive_euclidean(
+            self, 
+            Vnew : npt.NDArray[np.float64], 
+            Wnew : npt.NDArray[np.bool_], 
+            Rnew : npt.NDArray[np.float64],
+            ) -> npt.NDArray[np.float64]:
         znew = self.generate_new_conditional_posterior_predictive_zetas(Vnew, Wnew, Rnew)
         Ypnew = euclidean_to_psphere(Vnew, 10)
         R = gamma(znew[:,:,:self.nCol].sum(axis = 2))
         G = gamma(znew[:,:,self.nCol:(self.nCol + self.nCat)])
         return np.hstack((R[:,:,None] * Ypnew, G))
 
-    def generate_new_conditional_posterior_predictive_zetas(self, Vnew, Wnew, Rnew):
+    def generate_new_conditional_posterior_predictive_zetas(
+            self, 
+            Vnew : npt.NDArray[np.float64], 
+            Wnew : npt.NDArray[np.bool_], 
+            Rnew : npt.NDArray[np.float64],
+            ) -> npt.NDArray[np.float64]:
         n = Vnew.shape[0]
         Ypnew = euclidean_to_psphere(Vnew, 10)
         weights = np.zeros((self.nSamp, self.max_clust_count))
@@ -637,19 +719,18 @@ class Result(object):
                 znew[i,s] = self.samples.zeta[s,dnew[i,s]]
         return znew
     
-    def load_data(self, path):        
+    def load_data(self, path : str) -> None:        
         with open(path, 'rb') as file:
             out = pickle.load(file)
         
-        deltas = out['deltas']
-        zetas  = out['zetas']
-        mus    = out['mus']
-        Sigmas = out['Sigmas']
-        chis   = out['chis']
+        deltas : npt.NDArray[np.int32] = out['deltas']
+        zetas  : npt.NDArray[np.float64] = out['zetas']
+        mus    : npt.NDArray[np.float64] = out['mus']
+        Sigmas : npt.NDArray[np.float64] = out['Sigmas']
+        chis   : npt.NDArray[np.float64] = out['chis']
         
         self.data = Data.from_dict(out['data'])
         self.model_radius = out['model_radius']
-        # self.data = MixedDataBase(out['V'], out['W'], out['cats'])
         self.nSamp  = deltas.shape[0]
         self.nDat   = deltas.shape[1]
         self.nCat   = self.data.nCat
