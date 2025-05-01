@@ -29,7 +29,7 @@ MAX = np.finfo(float).max
 
 GEMPrior = namedtuple('GEMPrior', 'discount concentration')
 
-def bincount2D_vectorized(arr : npt.NDArray[np.int64], m : int):
+def bincount2D_vectorized(arr : npt.NDArray[np.int32], m : int) -> npt.NDArray[np.int32]:
     """
     code from stackoverflow:
         https://stackoverflow.com/questions/46256279    
@@ -114,7 +114,7 @@ class CRPSampler(BaseSampler):
         acc = self.samples.delta[(ns//2):].max(axis = 1).mean() + 1
         return '{:.2f}'.format(acc)
 
-    def sample(self, ns : int, verbose : bool = False):
+    def sample(self, ns : int, verbose : bool = False) -> None:
         """ Run the sampler """
         self.initialize_sampler(ns)
         self.start_time = time.time()
@@ -154,8 +154,15 @@ class StickBreakingSampler(CRPSampler):
                 )
         return (cc > 0).sum(axis = 1).mean()
 
-def dp_sample_cluster_crp8(delta, log_likelihood, prob, eta):
+def dp_sample_cluster_crp8(
+        delta          : npt.NDArray[np.int32], 
+        log_likelihood : npt.NDArray[np.float64], 
+        prob           : npt.NDArray[np.float64], 
+        eta            : float,
+        ) -> None:
     '''
+    Sample cluster assignment via Algorithm 8 of Neal (2000).
+    ----
     Args:
         delta          : (N)      : current cluster assignment
         log_likelihood : (N x J)  : log-likelihood of obs n under cluster j
@@ -185,8 +192,15 @@ def dp_sample_cluster_crp8(delta, log_likelihood, prob, eta):
             cand_cluster_state[delta[n]] = False
     return
 
-def pt_dp_sample_cluster_crp8(delta, log_likelihood, prob, eta):
+def pt_dp_sample_cluster_crp8(
+        delta          : npt.NDArray[np.int32], 
+        log_likelihood : npt.NDArray[np.float64], 
+        prob           : npt.NDArray[np.float64], 
+        eta            : npt.NDArray[np.float64],
+        ) -> None:
     """
+    Sample cluster assignment via Algorithm 8 of Neal (2000).
+    ---
     Args:
         delta          : (T x N)
         log_likelihood : (N x T x J)
@@ -217,8 +231,8 @@ def pt_dp_sample_cluster_crp8(delta, log_likelihood, prob, eta):
 
 def dp_sample_chi_bgsb(
         delta : npt.NDArray[np.int32], 
-        eta : float, 
-        J : int,
+        eta   : float, 
+        J     : int,
         ) -> npt.NDArray[np.float64]:
     '''
     args: 
@@ -237,8 +251,8 @@ def dp_sample_chi_bgsb(
 
 def pt_dp_sample_chi_bgsb(
         delta : npt.NDArray[np.int32],
-        eta : npt.NDArray[np.float64], 
-        J : int,
+        eta   : npt.NDArray[np.float64], 
+        J     : int,
         ) -> npt.NDArray[np.float64]:
     """
     Args: 
@@ -253,7 +267,11 @@ def pt_dp_sample_chi_bgsb(
     B = gamma(eta[:,None] + clustcount[:,::-1].cumsum(axis = 1)[:,::-1] - clustcount)
     return np.exp(np.log(A) - np.log(A + B))
     
-def dp_sample_concentration_bgsb(chi, a, b):
+def dp_sample_concentration_bgsb(
+        chi : npt.NDArray[np.float64], 
+        a   : float, 
+        b   : float,
+        ) -> float:
     """
     Gibbs Sampler for Concentration Parameter under
         Blocked-Gibbs Sticking-Breaking Representation of DP
@@ -270,7 +288,11 @@ def dp_sample_concentration_bgsb(chi, a, b):
         )
     return eta
 
-def pt_dp_sample_concentration_bgsb(chi, a, b):
+def pt_dp_sample_concentration_bgsb(
+        chi : npt.NDArray[np.float64], 
+        a   : float, 
+        b   : float,
+        ) -> npt.NDArray[np.float64]:
     """
     Gibbs Sampler for Concentration Parameter under
         Blocked-Gibbs Sticking-Breaking Representation of DP
@@ -285,12 +307,14 @@ def pt_dp_sample_concentration_bgsb(chi, a, b):
     _scale = 1 / (b - np.log(np.maximum(1 - chi[:,:-1], 1e-9)).sum(axis = 1))
     return gamma(shape = _shape, scale = _scale)
 
-def dp_sample_cluster_bgsb(chi, log_likelihood):
+def dp_sample_cluster_bgsb(
+        chi            : npt.NDArray[np.float64], 
+        log_likelihood : npt.NDArray[np.float64],
+        ) -> npt.NDArray[np.int32]:
     """
     Args:
         chi            : (J - 1  : Random Weights (betas)
         log_likelihood : (N x J) : log-likelihood of obs n under cluster j
-        eta ([type])   : Scalar
     """
     N, J = log_likelihood.shape
     scratch = np.zeros((N,J))
@@ -306,10 +330,16 @@ def dp_sample_cluster_bgsb(chi, log_likelihood):
     delta = (uniform(size = (N))[:,None] > scratch).sum(axis = 1)
     return delta
 
-def py_sample_cluster_bgsb(chi, log_likelihood):
+def py_sample_cluster_bgsb(
+        chi            : npt.NDArray[np.float64], 
+        log_likelihood : npt.NDArray[np.float64],
+        ) -> npt.NDArray[np.int32]:
     return dp_sample_cluster_bgsb(chi, log_likelihood)
 
-def pt_dp_sample_cluster_bgsb(chi, log_likelihood):
+def pt_dp_sample_cluster_bgsb(
+        chi            : npt.NDArray[np.float64],
+        log_likelihood : npt.NDArray[np.float64],
+        ) -> npt.NDArray[np.int32]:
     """
     Args:
         chi            : (T, J - 1)
@@ -329,33 +359,34 @@ def pt_dp_sample_cluster_bgsb(chi, log_likelihood):
         ).T
     return delta
 
-def pt_py_sample_cluster_bgsb(delta, log_likelihood):
-    return pt_dp_sample_cluster_bgsb(delta, log_likelihood)
+def pt_py_sample_cluster_bgsb(
+        chi            : npt.NDArray[np.float64], 
+        log_likelihood : npt.NDArray[np.float64],
+        ) -> npt.NDArray[np.int32]:
+    return pt_dp_sample_cluster_bgsb(chi, log_likelihood)
 
-def pt_dp_sample_cluster(delta, log_likelihood, prob, eta):
-    return pt_dp_sample_cluster_crp8(delta, log_likelihood, prob, eta)
-
-def pt_py_sample_chi_bgsb(delta, disc, conc, trunc):
-    """
-    Args:
-        delta : (T x N)
-        disc  : scalar (Pitman Yor discount parameter)
-        conc  : scalar (Pitman Yor concentration parameter)
-        trunc : Scalar (Blocked Gibbs Stick-Breaking Truncation Point)
-    Out:
-        chi   : (T, trunc)
-    """
-    clustcount = bincount2D_vectorized(delta, trunc)
-    shape1 = 1 - disc + clustcount
+def py_sample_chi_bgsb(
+        delta : npt.NDArray[np.int32], 
+        disc : float, 
+        conc : float, 
+        trunc : int,
+        ) -> npt.NDArray[np.float64]:
+    clustcount = np.bincount(delta, minlength = trunc)
+    shape1 = 1 + clustcount - disc
     shape2 = (
         + conc
-        + (np.arange(trunc) + 1)[None] * disc
-        + np.flip(np.flip(clustcount, -1).cumsum(axis = -1), -1) - clustcount
-        )
-    chi = beta(a = shape1, b = shape2)
+        + clustcount[::-1].cumsum()[::-1] - clustcount
+        + (np.arange(trunc) + 1) * disc
+    )
+    chi = beta(a = shape1[:-1], b = shape2[:-1])
     return chi
 
-def pt_py_sample_chi_bgsb_fixed(delta, disc, conc, trunc):
+def pt_py_sample_chi_bgsb(
+        delta : npt.NDArray[np.int32], 
+        disc  : float, 
+        conc  : float, 
+        trunc : int,
+        ) -> npt.NDArray[np.float64]:
     """
     Args:
         delta : (T x N)
@@ -375,41 +406,17 @@ def pt_py_sample_chi_bgsb_fixed(delta, disc, conc, trunc):
     chi = beta(a = shape1[:,:-1], b = shape2[:,:-1])
     return chi
 
-def py_sample_chi_bgsb_fixed(delta, disc, conc, trunc):
-    clustcount = np.bincount(delta, minlength = trunc)
-    shape1 = 1 + clustcount - disc
-    shape2 = (
-        + conc
-        + clustcount[::-1].cumsum()[::-1] - clustcount
-        + (np.arange(trunc) + 1) * disc
-    )
-    chi = beta(a = shape1[:-1], b = shape2[:-1])
-    return chi
-
-def pt_py_sample_cluster_bgsb(chi, log_likelihood):
+def pt_py_sample_cluster_bgsb(
+        chi            : npt.NDArray[np.float64], 
+        log_likelihood : npt.NDArray[np.float64],
+        ) -> npt.NDArray[np.int32]:
     return pt_dp_sample_cluster_bgsb(chi, log_likelihood)
 
-def pt_logd_gem_mx_st(chi, conc, disc):
-    """ 
-    Log-density for Griffith, Engen, & McCloskey distribution.
-    Args:
-        chi  : (T, J)
-        conc : scalar
-        disc : scalar
-    """
-    if type(conc) is not np.ndarray:
-        conc = np.array([conc])
-    k = (np.arange(chi.shape[1] - 1) + 1).reshape(1,-1)
-    a = (1 - disc) * np.ones(k.shape)
-    b = conc[:,None] + k * disc
-    ld = np.zeros(chi.shape[0])
-    with np.errstate(divide = 'ignore', invalid = 'ignore'):
-        ld += ((a - 1) * np.log(chi[:,:-1])).sum(axis = 1)
-        ld += ((b - 1) * np.log(1 - chi[:,:-1])).sum(axis = 1)
-        ld -= betaln(a,b).sum(axis = 1)
-    return ld
-
-def pt_logd_gem_mx_st_fixed(chi, disc, conc):
+def pt_logd_gem_mx_st(
+        chi  : npt.NDArray[np.float64], 
+        conc : float, 
+        disc : float,
+        ) -> npt.NDArray[np.float64]:    
     """ 
     Log-density for Griffith, Engen, & McCloskey distribution.
     Args:
@@ -431,19 +438,19 @@ def pt_logd_gem_mx_st_fixed(chi, disc, conc):
 
 class ParallelTemperingCRPSampler(CRPSampler):
     @property
-    def curr_cluster_count(self):
+    def curr_cluster_count(self) -> int:
         return self.curr_delta[0].max() + 1
     
-    def average_cluster_count(self, ns):
+    def average_cluster_count(self, ns) -> float:
         acc = self.samples.delta[(ns//2):,0].max(axis = 1).mean() + 1
         return '{:.2f}'.format(acc)
 
 class ParallelTemperingStickBreakingSampler(StickBreakingSampler):
     @property
-    def curr_cluster_count(self):
+    def curr_cluster_count(self) -> int:
         return (np.bincount(self.curr_delta[0]) > 0).sum()
     
-    def average_cluster_count(self, ns):
+    def average_cluster_count(self, ns) -> float:
         cc = bincount2D_vectorized(
             self.samples.delta[(ns//2):,0], 
             self.samples.delta[:,0].max() + 1,

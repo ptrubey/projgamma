@@ -3,6 +3,7 @@ Functions relating to density of Projected Gamma.  All functions are
 parameterized such that E(x) = alpha / beta (treat beta as rate parameter). 
 """
 import numpy as np
+import numpy.typing as npt
 
 np.seterr(under = 'ignore', over = 'raise')
 from collections import namedtuple
@@ -33,7 +34,12 @@ InvWishartPrior = namedtuple('InvWishartPrior', 'nu psi')
 
 ## Functions related to projected gamma density
 
-def logd_gamma(vY, alpha, beta):
+def logd_gamma(
+        vY    : npt.NDArray[np.float64], 
+        alpha : float, 
+        beta  : float,
+        ) -> npt.NDArray[np.float64]:
+    """ Log-density of Gamma RV """
     out = np.errstate(vY.shape[0])
     with np.errstate(divide = 'ignore', invalid = 'ignore'):
         out += alpha * np.log(beta)
@@ -43,7 +49,11 @@ def logd_gamma(vY, alpha, beta):
     np.nan_to_num(out, False, -np.inf)
     return out
 
-def logd_prodgamma_my_mt(aY, aAlpha, aBeta):
+def logd_prodgamma_my_mt(
+        aY     : npt.NDArray[np.float64], 
+        aAlpha : npt.NDArray[np.float64], 
+        aBeta  : npt.NDArray[np.float64],
+        ) -> npt.NDArray[np.float64]:
     """
     Product of Gammas log-density for multiple Y, multiple theta (not paired)
     ----
@@ -62,7 +72,11 @@ def logd_prodgamma_my_mt(aY, aAlpha, aBeta):
     np.nan_to_num(out, False, -np.inf)
     return out
 
-def pt_logd_prodgamma_my_mt(aY, aAlpha, aBeta):
+def pt_logd_prodgamma_my_mt(
+        aY     : npt.NDArray[np.float64], 
+        aAlpha : npt.NDArray[np.float64], 
+        aBeta  : npt.NDArray[np.float64],
+        ) -> npt.NDArray[np.float64]:
     """
     product of gammas log-density for multiple y, multiple theta 
     ----
@@ -82,7 +96,11 @@ def pt_logd_prodgamma_my_mt(aY, aAlpha, aBeta):
     np.nan_to_num(ld, False, -np.inf)
     return ld
 
-def logd_prodgamma_paired(aY, aAlpha, aBeta):
+def logd_prodgamma_paired(
+        aY     : npt.NDArray[np.float64], 
+        aAlpha : npt.NDArray[np.float64], 
+        aBeta  : npt.NDArray[np.float64],
+        ) -> npt.NDArray[np.float64]:
     """
     product of gammas log-density for paired y, theta
     ----
@@ -101,7 +119,11 @@ def logd_prodgamma_paired(aY, aAlpha, aBeta):
     np.nan_to_num(out, False, -np.inf)
     return out
 
-def pt_logd_prodgamma_paired(aY, aAlpha, aBeta):
+def pt_logd_prodgamma_paired(
+        aY     : npt.NDArray[np.float64], 
+        aAlpha : npt.NDArray[np.float64], 
+        aBeta  : npt.NDArray[np.float64],
+        ) -> npt.NDArray[np.float64]:
     """
     product of gammas log-density for paired y, theta
     ----
@@ -120,7 +142,11 @@ def pt_logd_prodgamma_paired(aY, aAlpha, aBeta):
     np.nan_to_num(out, False, -np.inf)
     return out                                     # per-temp,Y log-density
 
-def logd_prodgamma_my_st(aY, vAlpha, vBeta):
+def logd_prodgamma_my_st(
+        aY     : npt.NDArray[np.float64], 
+        vAlpha : npt.NDArray[np.float64], 
+        vBeta  : npt.NDArray[np.float64],
+        ) -> npt.NDArray[np.float64]:
     out = np.zeros(aY.shape[0])
     with np.errstate(divide = 'ignore', invalid = 'ignore'):
         out += (vAlpha * np.log(vBeta)).sum()  # scalar
@@ -130,7 +156,11 @@ def logd_prodgamma_my_st(aY, vAlpha, vBeta):
     np.nan_to_num(out, False, -np.inf)
     return out
 
-def pt_logd_prodgamma_my_st(aY, aAlpha, aBeta):
+def pt_logd_prodgamma_my_st(
+        aY     : npt.NDArray[np.float64], 
+        aAlpha : npt.NDArray[np.float64], 
+        aBeta  : npt.NDArray[np.float64],
+        ) -> npt.NDArray[np.float64]:
     """
     Log-density for product of Gammas 
         for Multiple Y, single theta (per temperature)
@@ -151,8 +181,11 @@ def pt_logd_prodgamma_my_st(aY, aAlpha, aBeta):
     np.nan_to_num(ld, False, -np.inf)
     return ld
 
-def pt_logd_projgamma_my_mt(aY, aAlpha, aBeta):
-    # def dprojgamma_log_my_mt(aY, aAlpha, aBeta):
+def pt_logd_projgamma_my_mt(
+        aY     : npt.NDArray[np.float64], 
+        aAlpha : npt.NDArray[np.float64], 
+        aBeta  : npt.NDArray[np.float64],
+        ) -> npt.NDArray[np.float64]:
     """
     projected gamma log-density (proportional) 
         for multiple Y, multiple theta (per temperature)
@@ -176,7 +209,12 @@ def pt_logd_projgamma_my_mt(aY, aAlpha, aBeta):
     np.nan_to_num(ld, False, -np.inf)
     return ld
 
-def pt_logd_projgamma_my_mt_inplace_unstable(out, aY, aAlpha, aBeta):
+def pt_logd_projgamma_my_mt_inplace_unstable(
+        out    : npt.NDArray[np.float64], 
+        aY     : npt.NDArray[np.float64], 
+        aAlpha : npt.NDArray[np.float64], 
+        aBeta  : npt.NDArray[np.float64],
+        ) -> None:
     """
     projected gamma log-density (proportional) 
         for multiple Y, multiple theta (per temperature)
@@ -199,7 +237,12 @@ def pt_logd_projgamma_my_mt_inplace_unstable(out, aY, aAlpha, aBeta):
     np.nan_to_num(out, False, -np.inf)
     return
 
-def logd_projgamma_my_mt_inplace_unstable(out, aY, aAlpha, aBeta):
+def logd_projgamma_my_mt_inplace_unstable(
+        out    : npt.NDArray[np.float64], 
+        aY     : npt.NDArray[np.float64], 
+        aAlpha : npt.NDArray[np.float64], 
+        aBeta  : npt.NDArray[np.float64],
+        ) -> None:
     if aY.shape[0] == 0:
         return
     Asum = aAlpha.sum(axis = -1)
@@ -212,8 +255,11 @@ def logd_projgamma_my_mt_inplace_unstable(out, aY, aAlpha, aBeta):
     np.nan_to_num(out, False, -np.inf)
     return
 
-def pt_logd_projgamma_paired_yt(aY, aAlpha, aBeta):
-    # def dprojgamma_log_paired_yt(aY, aAlpha, aBeta):
+def pt_logd_projgamma_paired_yt(
+        aY     : npt.NDArray[np.float64], 
+        aAlpha : npt.NDArray[np.float64], 
+        aBeta  : npt.NDArray[np.float64],
+        ) -> npt.NDArray[np.float64]:
     """
     projected gamma log-density (proportional) for paired y, theta
     ----
@@ -235,7 +281,10 @@ def pt_logd_projgamma_paired_yt(aY, aAlpha, aBeta):
     np.nan_to_num(ld, False, -np.inf)
     return ld
 
-def pt_logd_dirichlet_mx_ma(aY, aAlpha):
+def pt_logd_dirichlet_mx_ma(
+        aY     : npt.NDArray[np.float64], 
+        aAlpha : npt.NDArray[np.float64],
+        ) -> npt.NDArray[np.float64]:
     """
     Log-density for Dirichlet Distribution (assuming parallel tempering)
     ---
@@ -253,7 +302,7 @@ def pt_logd_dirichlet_mx_ma(aY, aAlpha):
     out += np.einsum('nd,tjd->ntj', np.log(aY), aAlpha - 1)
     return out
 
-def pt_stickbreak(nu):
+def pt_stickbreak(nu : npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     """
     parallel tempered stickbreaking function.
     nu : (T x (J-1))
@@ -265,16 +314,19 @@ def pt_stickbreak(nu):
     # np.exp(out, out = out)
     return softmax(out, axis = -1)
 
-def pt_log_stickbreak(nu):
+def pt_log_stickbreak(nu : npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     """ Parallel Tempered stick-breaking function (log) """
-    shape = list(nu.shape)
-    shape[-1] += 1
-    out = np.zeros(shape = shape)
+    out = np.zeros((nu.shape[0], nu.shape[1] + 1))
     out[..., :-1] += np.log(nu)
     out[..., 1: ] += np.cumsum(np.log(1 - nu), axis = -1)
     return log_softmax(out, axis = -1)
 
-def pt_logd_mixprojgamma(aY, aAlpha, aBeta, nu):
+def pt_logd_mixprojgamma(
+        aY     : npt.NDArray[np.float64], 
+        aAlpha : npt.NDArray[np.float64], 
+        aBeta  : npt.NDArray[np.float64], 
+        nu     : npt.NDArray[np.float64],
+        ) -> npt.NDArray[np.float64]:
     """ 
     Parallel tempered mixture of projected gammas (omitting normalizing constant) 
     aY: (N x D)
@@ -293,7 +345,11 @@ def pt_logd_mixprojgamma(aY, aAlpha, aBeta, nu):
 
 ## functions relating to gamma density
 
-def logd_gamma_my(aY, alpha, beta):
+def logd_gamma_my(
+        aY    : npt.NDArray[np.float64], 
+        alpha : float, 
+        beta  : float,
+        ) -> npt.NDArray[np.float64]:
     """
     log-density of Gamma distribution
 
@@ -313,7 +369,11 @@ def logd_gamma_my(aY, alpha, beta):
     np.nan_to_num(lp, False, -np.inf)
     return lp
 
-def pt_logd_gamma_my(aY, aAlpha, aBeta):
+def pt_logd_gamma_my(
+        aY     : npt.NDArray[np.float64], 
+        aAlpha : npt.NDArray[np.float64], 
+        aBeta  : npt.NDArray[np.float64],
+        ) -> npt.NDArray[np.float64]:
     """
     log-density of Gamma distribution
     
@@ -334,7 +394,11 @@ def pt_logd_gamma_my(aY, aAlpha, aBeta):
     return ld.sum(axis = 2)
 
 ## functions relating to log-normal density
-def pt_logd_lognormal_my(aY, aMu, aSigma):
+def pt_logd_lognormal_my(
+        aY     : npt.NDArray[np.float64], 
+        aMu    : npt.NDArray[np.float64], 
+        aSigma : npt.NDArray[np.float64],
+        ) -> npt.NDArray[np.float64]:
     """
     log-density of Log-normal distribution
     ---
@@ -355,7 +419,11 @@ def pt_logd_lognormal_my(aY, aMu, aSigma):
     out -= 0.5 * diff * diff
     return out
 
-def logd_lognormal_my(aY, mu, sigma):
+def logd_lognormal_my(
+        aY    : npt.NDArray[np.float64], 
+        mu    : npt.NDArray[np.float64], 
+        sigma : npt.NDArray[np.float64],
+        ) -> npt.NDArray[np.float64]:
     """
     log-density of log-normal distribution
     ---
@@ -376,7 +444,11 @@ def logd_lognormal_my(aY, mu, sigma):
     out -= 0.5 * diff * diff
     return out
 
-def logd_normal_my(aY, mu, sigma):
+def logd_normal_my(
+        aY    : npt.NDArray[np.float64], 
+        mu    : npt.NDArray[np.float64], 
+        sigma : npt.NDArray[np.float64], 
+        ) -> npt.NDArray[np.float64]:
     """
     log-density of log-normal distribution
     ---
@@ -397,7 +469,12 @@ def logd_normal_my(aY, mu, sigma):
 
 ## Functions relating to MVnormal density
 
-def pt_logd_mvnormal_mx_st(x, mu, cov_chol, cov_inv):
+def pt_logd_mvnormal_mx_st(
+        x        : npt.NDArray[np.float64], 
+        mu       : npt.NDArray[np.float64], 
+        cov_chol : npt.NDArray[np.float64], 
+        cov_inv  : npt.NDArray[np.float64],
+        ) -> npt.NDArray[np.float64]:
     # def dmvnormal_log_mx(x, mu, cov_chol, cov_inv):
     """ 
     multivariate normal log-density for multiple x, single theta per temp
@@ -419,14 +496,30 @@ def pt_logd_mvnormal_mx_st(x, mu, cov_chol, cov_inv):
     np.nan_to_num(ld, False, -np.inf)
     return ld
 
-def logd_mvnormal_mx_st(x, mu, cov_chol, cov_inv):
-    #dmvnormal_log_mx_st(x, mu, cov_chol, cov_inv):
+def logd_mvnormal_mx_st(
+        x        : npt.NDArray[np.float64], 
+        mu       : npt.NDArray[np.float64], 
+        cov_chol : npt.NDArray[np.float64], 
+        cov_inv  : npt.NDArray[np.float64],
+        ) -> npt.NDArray[np.float64]:
+    """ 
+    multivariate normal log-density for multiple x, single theta
+    ------
+    x        : array of alphas    (j x d)
+    mu       : array of mus       (d)
+    cov_chol : array of cov chols (d x d)
+    cov_inv  : array of cov mats  (d x d)    
+    """
     ld = np.zeros(x.shape[:-1])
     ld -= np.log(np.diag(cov_chol)).sum()
     ld -= 0.5 * np.einsum('td,dl,tl->t',x - mu, cov_inv, x - mu)
     return ld
 
-def logd_invwishart_ms(Sigma, nu, psi):
+def logd_invwishart_ms(
+        Sigma : npt.NDArray[np.float64], 
+        nu    : npt.NDArray[np.float64], 
+        psi   : npt.NDArray[np.float64],
+        ) -> npt.NDArray[np.float64]:
     # def dinvwishart_log_ms(Sigma, nu, psi):
     ld = np.zeros(Sigma.shape[0])
     ld += 0.5 * nu * slogdet(psi)[1]
@@ -440,7 +533,10 @@ def logd_invwishart_ms(Sigma, nu, psi):
 
 ## Functions relating to dirichlet-multinomial density
 
-def logd_dirmultinom_mx_sa(aW, vAlpha):
+def logd_dirmultinom_mx_sa(
+        aW     : npt.NDArray[np.float64], 
+        vAlpha : npt.NDArray[np.float64],
+        ) -> npt.NDArray[np.float64]:
     # def logd_dirichlet_multinomial_mx_sa(aW, vAlpha):
     """
     log-density for Dirichlet-Multinomial;
@@ -465,7 +561,10 @@ def logd_dirmultinom_mx_sa(aW, vAlpha):
     logd -= loggamma(aW + 1).sum(axis = 1)
     return logd
 
-def logd_dirmultinom_paired(aW, aAlpha):
+def logd_dirmultinom_paired(
+        aW     : npt.NDArray[np.float64], 
+        aAlpha : npt.NDArray[np.float64],
+        ) -> npt.NDArray[np.float64]:
     """
     log-density for Dirichlet-Multinomial
     calculates log-density for each observation/shape parameter pair
@@ -485,7 +584,11 @@ def logd_dirmultinom_paired(aW, aAlpha):
     logd -= loggamma(aW + 1).sum(axis = 1)
     return logd
 
-def logd_cumdirmultinom_mx_sa(aW, vAlpha, sphere_mat):
+def logd_cumdirmultinom_mx_sa(
+        aW         : npt.NDArray[np.float64], 
+        vAlpha     : npt.NDArray[np.float64], 
+        sphere_mat : npt.NDArray[np.bool_],
+        ) -> npt.NDArray[np.float64]:
     sa = np.einsum('d,cd->c', vAlpha, sphere_mat)
     sw = np.einsum('nd,cd->nc', aW, sphere_mat)
     logd = np.zeros(aW.shape[0])
@@ -499,7 +602,11 @@ def logd_cumdirmultinom_mx_sa(aW, vAlpha, sphere_mat):
     np.nan_to_num(logd, False, -np.inf)
     return logd
 
-def logd_cumdircateg_mx_sa(aW, vAlpha, sphere_mat):
+def logd_cumdircateg_mx_sa(
+        aW         : npt.NDArray[np.bool_], 
+        vAlpha     : npt.NDArray[np.float64], 
+        sphere_mat : npt.NDArray[np.bool_],
+        ) -> npt.NDArray[np.float64]:
     sa = np.einsum('d,cd->c', vAlpha, sphere_mat)
     sw = np.einsum('nd,cd->nc', aW, sphere_mat) # matrix of ones (n x c)
     logd = np.zeros(aW.shape[0])
@@ -514,7 +621,11 @@ def logd_cumdircateg_mx_sa(aW, vAlpha, sphere_mat):
     np.nan_to_num(logd, False, -np.inf)
     return logd
 
-def pt_logd_cumdirmultinom_mx_sa(aW, aAlpha, sphere_mat):
+def pt_logd_cumdirmultinom_mx_sa(
+        aW         : npt.NDArray[np.int32], 
+        aAlpha     : npt.NDArray[np.float64], 
+        sphere_mat : npt.NDArray[np.bool_],
+        ) -> npt.NDArray[np.float64]:
     sa = np.einsum('td,cd->tc', aAlpha, sphere_mat) # (t,c)
     sw = np.einsum('nd,cd->nc', aW, sphere_mat)     # (n,c)
     logd = np.zeros((aAlpha.shape[0], aW.shape[0])) # (t,n)
@@ -528,7 +639,11 @@ def pt_logd_cumdirmultinom_mx_sa(aW, aAlpha, sphere_mat):
     np.nan_to_num(logd, False, -np.inf)
     return logd
 
-def logd_cumdirmultinom_mx_ma(aW, aAlpha, sphere_mat):
+def logd_cumdirmultinom_mx_ma(
+        aW         : npt.NDArray[np.int32], 
+        aAlpha     : npt.NDArray[np.float64], 
+        sphere_mat : npt.NDArray[np.bool_],
+        ) -> npt.NDArray[np.float64]:
     """
     Log-density of concatenated Dirichlet-Multinomial distribution
     ---
@@ -552,7 +667,11 @@ def logd_cumdirmultinom_mx_ma(aW, aAlpha, sphere_mat):
     np.nan_to_num(logd, False, -np.inf)
     return logd
 
-def pt_logd_cumdirmultinom_mx_ma(aW, aAlpha, sphere_mat):
+def pt_logd_cumdirmultinom_mx_ma(
+        aW : npt.NDArray[np.int32], 
+        aAlpha : npt.NDArray[np.float64], 
+        sphere_mat : npt.NDArray[np.bool_],
+        ) -> npt.NDArray[np.float64]:
     """
     inputs:
         aW:         (n,d)
@@ -574,7 +693,12 @@ def pt_logd_cumdirmultinom_mx_ma(aW, aAlpha, sphere_mat):
     np.nan_to_num(logd, False, -np.inf)
     return logd
 
-def pt_logd_cumdircategorical_mx_ma_inplace_unstable_older(out, aW, aAlpha, sphere_mat):
+def pt_logd_cumdircategorical_mx_ma_inplace_unstable_older(
+        out        : npt.NDArray[np.float64], 
+        aW         : npt.NDArray[np.bool_], 
+        aAlpha     : npt.NDArray[np.float64], 
+        sphere_mat : npt.NDArray[np.bool_],
+        ) -> None:
     sa = np.einsum('tjd,cd->tjc', aAlpha, sphere_mat)
     sw = np.einsum('nd,cd->nc', aW, sphere_mat)
     out += np.einsum('tjc->tj', loggamma(sa))[None,:,:]
@@ -583,7 +707,12 @@ def pt_logd_cumdircategorical_mx_ma_inplace_unstable_older(out, aW, aAlpha, sphe
     out -= np.einsum('tjd->tj', loggamma(aAlpha))[None,:,:]
     return
 
-def pt_logd_cumdircategorical_mx_ma_inplace_unstable_old(out, aW, aAlpha, sphere_mat):
+def pt_logd_cumdircategorical_mx_ma_inplace_unstable_old(
+        out        : npt.NDArray[np.float64], 
+        aW         : npt.NDArray[np.bool_], 
+        aAlpha     : npt.NDArray[np.float64], 
+        sphere_mat : npt.NDArray[np.bool_],
+        ) -> None:
     """
     inputs:
         aW:         (n,d)
@@ -604,7 +733,11 @@ def pt_logd_cumdircategorical_mx_ma_inplace_unstable_old(out, aW, aAlpha, sphere
     out -= np.einsum('tjd->tj', ga)[None,:,:]
     return
 
-def pt_logd_cumdircategorical_mx_ma(aW, aAlpha, sphere_mat):
+def pt_logd_cumdircategorical_mx_ma(
+        aW         : npt.NDArray[np.bool_], 
+        aAlpha     : npt.NDArray[np.float64], 
+        sphere_mat : npt.NDArray[np.bool_],
+        ) -> npt.NDArray[np.float64]:
     """
     inputs:
         aW:         (n,d)
@@ -626,11 +759,11 @@ def pt_logd_cumdircategorical_mx_ma(aW, aAlpha, sphere_mat):
     return out
 
 def pt_logd_cumdircategorical_mx_ma_inplace_unstable(
-        out         : np.ndarray, 
-        aC          : np.ndarray, 
-        aAlpha      : np.ndarray, 
-        sphere_mat  : np.ndarray,
-        ):
+        out         : npt.NDArray[np.float64],
+        aC          : npt.NDArray[np.bool_],
+        aAlpha      : npt.NDArray[np.float64], 
+        sphere_mat  : npt.NDArray[np.bool_],
+        ) -> None:
     """
     inputs:
         aC:         (n,d)
@@ -648,9 +781,9 @@ def pt_logd_cumdircategorical_mx_ma_inplace_unstable(
     return
 
 def pt_logd_cumdircategorical_mx_ma(
-        aC          : np.ndarray, 
-        aAlpha      : np.ndarray, 
-        sphere_mat  : np.ndarray,
+        aC          : npt.NDArray[np.bool_], 
+        aAlpha      : npt.NDArray[np.float64], 
+        sphere_mat  : npt.NDArray[np.bool_],
         ):
     """
     inputs:
@@ -668,7 +801,12 @@ def pt_logd_cumdircategorical_mx_ma(
     out -= lsa
     return out
 
-def pt_logd_cumdirmultinom_mx_ma_inplace_unstable(out, aW, aAlpha, sphere_mat):
+def pt_logd_cumdirmultinom_mx_ma_inplace_unstable(
+        out        : npt.NDArray[np.float64], 
+        aW         : npt.NDArray[np.int32], 
+        aAlpha     : npt.NDArray[np.float64], 
+        sphere_mat : npt.NDArray[np.bool_],
+        ) -> None:
     sa = np.einsum('tjd,cd->tjc', aAlpha, sphere_mat)
     sw = np.einsum('nd,cd->nc', aW, sphere_mat)
     out += np.einsum('tjc->tj', loggamma(sa))[None,:,:]
@@ -679,7 +817,11 @@ def pt_logd_cumdirmultinom_mx_ma_inplace_unstable(out, aW, aAlpha, sphere_mat):
     out -= np.einsum('nd->n', loggamma(aW + 1))[:,None,None]
     return
 
-def logd_cumdirmultinom_paired(aW, aAlpha, sphere_mat):
+def logd_cumdirmultinom_paired(
+        aW         : npt.NDArray[np.int32], 
+        aAlpha     : npt.NDArray[np.float64], 
+        sphere_mat : npt.NDArray[np.bool_],
+        ) -> npt.NDArray[np.float64]:
     sa = np.einsum('nd,cd->nc', aAlpha, sphere_mat)
     sw = np.einsum('nd,cd->nc', aW, sphere_mat)
     logd = np.zeros(aW.shape[0])
@@ -693,7 +835,11 @@ def logd_cumdirmultinom_paired(aW, aAlpha, sphere_mat):
     np.nan_to_num(logd, False, -np.inf)
     return logd
 
-def pt_logd_cumdirmultinom_paired_yt(aW, aAlpha, sphere_mat):
+def pt_logd_cumdirmultinom_paired_yt(
+        aW         : npt.NDArray[np.int32], 
+        aAlpha     : npt.NDArray[np.float64], 
+        sphere_mat : npt.NDArray[np.bool_],
+        ):
     """
     returns log-likelihood per temperature
     inputs:
@@ -721,7 +867,11 @@ def pt_logd_cumdirmultinom_paired_yt(aW, aAlpha, sphere_mat):
 
 ## Functions relating to loggamma density
 
-def logd_loggamma_sx(x, a, b):
+def logd_loggamma_sx(
+        x : float, 
+        a : float, 
+        b : float,
+        ) -> float:
     logd = 0.
     logd += a * log(b)
     logd -= loggamma(a)
