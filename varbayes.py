@@ -1,4 +1,5 @@
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 import projgamma as pg
 from scipy.special import digamma, polygamma, softmax, logit, expit
@@ -21,7 +22,7 @@ from projgamma import pt_logd_projgamma_my_mt_inplace_unstable,                 
 from samplers import py_sample_chi_bgsb_fixed, py_sample_cluster_bgsb_fixed,    \
     pt_py_sample_cluster_bgsb_fixed
 
-def stickbreak(nu):
+def stickbreak(nu : npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     """
         Stickbreaking cluster probability
         nu : (S x (J - 1))

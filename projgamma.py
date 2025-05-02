@@ -879,7 +879,11 @@ def logd_loggamma_sx(
     logd -= b * exp(x)
     return logd
 
-def logd_loggamma_mx_st(x, a, b):
+def logd_loggamma_mx_st(
+        x : npt.NDArray[np.float64], 
+        a : float, 
+        b : float,
+        ) -> npt.NDArray[np.float64]:
     logd = np.zeros(x.shape[0])
     with np.errstate(divide = 'ignore', invalid = 'ignore'):
         logd += a * np.log(b)
@@ -888,7 +892,11 @@ def logd_loggamma_mx_st(x, a, b):
         logd -= b * np.exp(x)
     return logd
 
-def logd_loggamma_paired(x, a, b):
+def logd_loggamma_paired(
+        x : npt.NDArray[np.float64], 
+        a : npt.NDArray[np.float64], 
+        b : npt.NDArray[np.float64],
+        ) -> npt.NDArray[np.float64]:
     """
     Log-density of log-gamma distribution at multiple temperatures
     inputs:
@@ -907,7 +915,11 @@ def logd_loggamma_paired(x, a, b):
     np.nan_to_num(logd, False, -np.inf)
     return logd
 
-def pt_logd_loggamma_mx_st(x, a, b):
+def pt_logd_loggamma_mx_st(
+        x : npt.NDArray[np.float64], 
+        a : npt.NDArray[np.float64], 
+        b : npt.NDArray[np.float64],
+        ) -> npt.NDArray[np.float64]:
     """
     Log-density of log-gamma distribution at multiple temperatures
     inputs:
@@ -926,7 +938,16 @@ def pt_logd_loggamma_mx_st(x, a, b):
     np.nan_to_num(logd, False, -np.inf)
     return logd
 
-def pt_logpost_loggammagamma(logalpha, n, sy, sly, a, b, c, d):
+def pt_logpost_loggammagamma(
+        logalpha : npt.NDArray[np.float64], 
+        n : npt.NDArray[np.int32], 
+        sy : npt.NDArray[np.float64], 
+        sly : npt.NDArray[np.float64], 
+        a : float, 
+        b : float, 
+        c : float, 
+        d : float,
+        ) -> npt.NDArray[np.float64]:
     """
     logalpha    : (t, d), log-shape parameter (variable) in gamma-gamma model
     n,          : (t), number of observations
@@ -943,7 +964,16 @@ def pt_logpost_loggammagamma(logalpha, n, sy, sly, a, b, c, d):
     ld -= (n[:,None] * alpha + c) * np.log(sy + d)
     return ld
 
-def pt_logpost_lognormalgamma(logalpha, n, sy, sly, mu, sigma, xi, tau):
+def pt_logpost_lognormalgamma(
+        logalpha : npt.NDArray[np.float64], 
+        n        : npt.NDArray[np.int32], 
+        sy       : npt.NDArray[np.float64], 
+        sly      : npt.NDArray[np.float64], 
+        mu       : npt.NDArray[np.float64], 
+        sigma    : npt.NDArray[np.float64], 
+        xi       : npt.NDArray[np.float64], 
+        tau      : npt.NDArray[np.float64],
+        ) -> npt.NDArray[np.float64]:
     """
     Log-posterior for shape parameter of gamma distribuion, wih rate
     integrated out.
@@ -968,7 +998,11 @@ def pt_logpost_lognormalgamma(logalpha, n, sy, sly, mu, sigma, xi, tau):
     return out
 
 ## functions relating to inverse gamma density
-def logd_invgamma_my(aY, alpha, beta):
+def logd_invgamma_my(
+        aY    : npt.NDArray[np.float64], 
+        alpha : float, 
+        beta  : float,
+        ) -> npt.NDArray[np.float64]:
     """
     log-density of inverse gamma distribution
     ---
@@ -988,7 +1022,10 @@ def logd_invgamma_my(aY, alpha, beta):
 
 ## Functions relating to Pareto Density
 
-def pt_logd_pareto_paired_yt(vR, aAlpha):
+def pt_logd_pareto_paired_yt(
+        vR     : npt.NDArray[np.float64], 
+        aAlpha : npt.NDArray[np.float64],
+        ) -> npt.NDArray[np.float64]:
     """
     inputs:
         out : (t,n)
@@ -997,7 +1034,11 @@ def pt_logd_pareto_paired_yt(vR, aAlpha):
     """
     return -(aAlpha + 1) * np.log(vR[None])
 
-def pt_logd_pareto_mx_ma_inplace_unstable(out, vR, aAlpha):
+def pt_logd_pareto_mx_ma_inplace_unstable(
+        out    : npt.NDArray[np.float64], 
+        vR     : npt.NDArray[np.float64], 
+        aAlpha : npt.NDArray[np.float64],
+        ) -> None:
     """
     inputs:
         out:    (n,t,j)
@@ -1009,7 +1050,10 @@ def pt_logd_pareto_mx_ma_inplace_unstable(out, vR, aAlpha):
     out -= (aAlpha + 1)[None] * np.log(vR[:,None,None])
     return
 
-def pt_logd_pareto_mx_ma(vR, aAlpha):
+def pt_logd_pareto_mx_ma(
+        vR     : npt.NDArray[np.float64], 
+        aAlpha : npt.NDArray[np.float64],
+        ) -> npt.NDArray[np.float64]:
     """
     inputs:
         vR:     (n)
@@ -1025,7 +1069,11 @@ def pt_logd_pareto_mx_ma(vR, aAlpha):
 ## Functions related to sampling for parameters from posterior, assuming
 ## a projected gamma likelihood.
 
-def log_post_log_alpha_1(log_alpha_1, y_1, prior):
+def log_post_log_alpha_1(
+        log_alpha_1 : npt.NDArray[np.float64], 
+        y_1         : npt.NDArray[np.float64], 
+        prior       : GammaPrior[float,float]
+        ) -> npt.NDArray[np.float64]:
     """ Log posterior for log-alpha_1 assuming a gamma distribution,
     with beta assumed to be 1. """
     alpha_1 = exp(log_alpha_1)
@@ -1038,7 +1086,12 @@ def log_post_log_alpha_1(log_alpha_1, y_1, prior):
         )
     return lp
 
-def sample_alpha_1_mh(curr_alpha_1, y_1, prior, proposal_sd = 0.3):
+def sample_alpha_1_mh(
+        curr_alpha_1 : npt.NDArray[np.float64], 
+        y_1          : npt.NDArray[np.float64], 
+        prior        : GammaPrior[float, float], 
+        proposal_sd  : float = 0.3,
+        ) -> npt.NDArray[np.float64]:
     """ Sampling function for shape parameter, with gamma likelihood and
     gamma prior.  Assumes rate parameter = 1.  uses Metropolis Hastings
     algorithm with random walk for sampling. """
@@ -1056,7 +1109,12 @@ def sample_alpha_1_mh(curr_alpha_1, y_1, prior, proposal_sd = 0.3):
     else:
         return curr_alpha_1
 
-def log_post_log_alpha_k(log_alpha, y, prior_a, prior_b):
+def log_post_log_alpha_k(
+        log_alpha : npt.NDArray[np.float64], 
+        y         : npt.NDArray[np.float64], 
+        prior_a   : GammaPrior[float,float], 
+        prior_b   : GammaPrior[float,float],
+        ) -> npt.NDArray[np.float64]:
     """ Log posterior for log-alpha assuming a gamma distribution,
     beta integrated out of the posterior. """
     alpha = exp(log_alpha)
@@ -1071,7 +1129,13 @@ def log_post_log_alpha_k(log_alpha, y, prior_a, prior_b):
         )
     return lp
 
-def sample_alpha_k_mh(curr_alpha_k, y_k, prior_a, prior_b, proposal_sd = 0.3):
+def sample_alpha_k_mh(
+        curr_alpha_k : npt.NDArray[np.float64], 
+        y_k          : npt.NDArray[np.float64], 
+        prior_a      : GammaPrior[float,float], 
+        prior_b      : GammaPrior[float,float], 
+        proposal_sd  : float = 0.3,
+        ) -> npt.NDArray[np.float64]:
     """ Sampling Function for shape parameter, with Gamma likelihood and Gamma
     prior, with rate (with gamma prior) integrated out. """
     if len(y_k) <= 1:
@@ -1088,7 +1152,11 @@ def sample_alpha_k_mh(curr_alpha_k, y_k, prior_a, prior_b, proposal_sd = 0.3):
     else:
         return curr_alpha_k
 
-def sample_beta_fc(alpha, y, prior):
+def sample_beta_fc(
+        alpha : npt.NDArray[np.float64], 
+        y     : npt.NDArray[np.float64], 
+        prior : GammaPrior[float,float],
+        ) -> npt.NDArray[np.float64]:
     aa = len(y) * alpha + prior.a
     bb = sum(y) + prior.b
     return gamma.rvs(aa, scale = 1. / bb)
