@@ -12,17 +12,13 @@ DirichletProcessSampler assumes the existence of:
     obj.samples.delta
     obj.curr_delta
 """
-import time
 import numpy as np
 import numpy.typing as npt
 np.seterr(divide = 'raise', invalid = 'raise')
 from numpy.random import beta, uniform, gamma
-from scipy.special import loggamma, betaln, softmax
+from scipy.special import betaln, softmax, log_softmax
 from collections import namedtuple
-import math
-import warnings
-
-from numpy.typing import NDArray
+import time
 
 EPS = np.finfo(float).eps
 MAX = np.finfo(float).max
@@ -435,6 +431,29 @@ def pt_logd_gem_mx_st(
         ld += ((b - 1) * np.log(1 - chi)).sum(axis = 1)
         ld -= betaln(a,b).sum(axis = 1)
     return ld
+
+def stickbreak(nu : npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+    """
+        Stickbreaking cluster probability
+        nu : (S x (J - 1))
+    """
+    with np.errstate(divide = 'ignore'):
+        lognu = np.log(nu)
+        log1mnu = np.log(1 - nu)
+    out = np.zeros((nu.shape[0], nu.shape[1] + 1))
+    out[...,:-1] += lognu
+    out[..., 1:] += np.cumsum(log1mnu, axis = -1)
+    return softmax(out, axis = -1)
+
+def log_stickbreak(nu : npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+    """ Parallel Tempered stick-breaking function (log) """
+    with np.errstate(divide = 'ignore'):
+        lognu = np.log(nu)
+        log1mnu = np.log(1 - nu)
+    out = np.zeros((nu.shape[0], nu.shape[1] + 1))
+    out[..., :-1] += np.log(nu)
+    out[..., 1: ] += np.cumsum(np.log(1 - nu), axis = -1)
+    return log_softmax(out, axis = -1)
 
 class ParallelTemperingCRPSampler(CRPSampler):
     @property
