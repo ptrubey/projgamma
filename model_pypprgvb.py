@@ -18,13 +18,24 @@ np.seterr(divide = 'raise', over = 'raise', under = 'ignore', invalid = 'raise')
 Prior = namedtuple('Prior','alpha beta')
 
 class Samples(object):
-    r     : deque[npt.NDArray[np.float64]] # radius (projected gamma)
-    chi   : deque[npt.NDArray[np.float64]] # stick-breaking weights (unnormalized)
-    delta : deque[npt.NDArray[np.int32]]   # cluster identifiers
-    beta  : deque[npt.NDArray[np.float64]] # rate hyperparameter
-    alpha : deque[npt.NDArray[np.float64]] # shape hyperparameter (inferred)
-    zeta  : deque[npt.NDArray[np.float64]] # shape parameter (inferred)
+    r     : deque[npt.NDArray[np.float64]] = None # radius (projected gamma)
+    chi   : deque[npt.NDArray[np.float64]] = None # stick-breaking weights (unnormalized)
+    delta : deque[npt.NDArray[np.int32]]   = None # cluster identifiers
+    beta  : deque[npt.NDArray[np.float64]] = None # rate hyperparameter
+    alpha : deque[npt.NDArray[np.float64]] = None # shape hyperparameter (inferred)
+    zeta  : deque[npt.NDArray[np.float64]] = None # shape parameter (inferred)
     
+    def to_dict(self) -> dict:
+        out = {
+            'r' : np.stack(self.r),
+            'chi' : np.stack(self.chi),
+            'delta' : np.stack(self.delta),
+            'beta' : np.stack(self.beta),
+            'alpha' : np.stack(self.alpha),
+            'zeta' : np.stack(self.zeta),
+            }
+        return out
+
     def __init__(
             self, 
             nkeep : int, 
@@ -181,6 +192,13 @@ class VariationalParameters(object):
     zeta_adam    : Adam
     alpha_mutau  : npt.NDArray[np.float64]
     alpha_adam   : Adam
+
+    def to_dict(self) -> dict:
+        out = {
+            'zeta_mutau'  : self.zeta_mutau,
+            'alpha_mutau' : self.alpha_mutau,
+            }
+        return out
 
     def __init__(self, S : int, J : int, **kwargs):
         self.zeta_mutau = np.zeros((2, J, S)) # normal(size = (2, J, S))
@@ -352,6 +370,17 @@ class Chain(StickBreakingSampler):
             ).T
         return
     
+    def to_dict(self) -> dict:
+        out = {
+            'varparm' : self.varparm.to_dict(),
+            'samples' : self.samples.to_dict(),
+            'data'    : self.data.to_dict(),
+            'time'    : self.time_elapsed_numeric,
+            'conc'    : self.concentration,
+            'disc'    : self.discount,
+            }
+        return out
+
     def write_to_disk(self, path) -> None:
         if type(path) is str:
             folder = os.path.split(path)[0]
@@ -430,9 +459,9 @@ class ResultSamples(Samples):
         return
 
 class Result(object):
-    samples : ResultSamples
-    discount : float
-    concentration : float
+    samples              : ResultSamples
+    discount             : float
+    concentration        : float
     time_elapsed_numeric : float
     N : int
     S : int
@@ -450,37 +479,32 @@ class Result(object):
         zetas = self.generate_conditional_posterior_predictive_zetas()
         return gamma(shape = zetas)
     
-    def generate_posterior_predictive_zetas(self, n_per_sample = 10) -> npt.NDArray[np.float64]:
+    def generate_posterior_predictive_zetas(self, n_per_sample : int = 10) -> npt.NDArray[np.float64]:
         zetas = []
+        nSamp = self.samples.chi.shape[0]     # number of MCMC samples
         probs = stickbreak(self.samples.chi)
         Sprob = np.cumsum(probs, axis = -1)
-        unis  = uniform(size = (self.nSamp, n_per_sample))
-        for s in range(self.nSamp):
+        unis  = uniform(size = (nSamp, n_per_sample))
+        for s in range(nSamp):
             delta = np.searchsorted(Sprob[s], unis[s])
             zetas.append(self.samples.zeta[s][delta])
         zetas = np.vstack(zetas)
         return(zetas)
     
-    def generate_posterior_predictive_gammas(self, n_per_sample = 10) -> npt.NDArray[np.float64]:
+    def generate_posterior_predictive_gammas(self, n_per_sample : int = 10) -> npt.NDArray[np.float64]:
         zetas = self.generate_posterior_predictive_zetas(n_per_sample)
         return gamma(shape = zetas)
 
-    def generate_posterior_predictive_hypercube(self, n_per_sample = 10) -> npt.NDArray[np.float64]:
+    def generate_posterior_predictive_hypercube(self, n_per_sample : int = 10) -> npt.NDArray[np.float64]:
         gammas = self.generate_posterior_predictive_gammas(n_per_sample)
         return euclidean_to_hypercube(gammas)
 
-    def load_data(self, path):
-        if type(path) is BytesIO:
-            out = pickle.loads(path.getvalue())
-        else:
-            with open(path, 'rb') as file:
-                out = pickle.load(file)
-        self.samples = ResultSamples(out)
-        self.concentration = out['conc']
+    def load_data(self, out):
+        self.data     = Data.from_dict(out['data'])
+        self.samples  = ResultSamples(out['samples'])
+        self.varparm  = VariationalParameters(out['varparm'])
         self.discount = out['disc']
-        self.N = out['nDat']
-        self.S = out['nCol']
-        self.nSamp = self.samples.chi.shape[0]
+        self.concentration = out['conc']
         self.time_elapsed_numeric = out['time']
         return
 
@@ -489,9 +513,8 @@ class Result(object):
         return
     
 if __name__ == '__main__':
-    # pass
-    raw = pd.read_csv('./datasets/ivt_updated_nov_mar.csv')
-    # raw = pd.read_csv('./datasets/ivt_nov_mar.csv')
+    # raw = pd.read_csv('./datasets/ivt_updated_nov_mar.csv')
+    raw = pd.read_csv('./datasets/ivt_nov_mar.csv')
     data = Data.from_raw(
         raw, 
         x1ht_cols = np.arange(raw.shape[1]), 

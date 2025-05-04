@@ -19,6 +19,9 @@ from numpy.random import beta, uniform, gamma
 from scipy.special import betaln, softmax, log_softmax
 from collections import namedtuple
 import time
+import os
+import pickle
+from io import BytesIO
 
 EPS = np.finfo(float).eps
 MAX = np.finfo(float).max
@@ -510,6 +513,31 @@ class Stepsize(object):
         return
     
     pass 
+
+def write_to_disk(out : dict, path : str) -> None:
+    assert type(path) is str
+    folder = os.path.split(path)[0]
+    if not os.path.exists(folder):
+        os.mkdir(folder)
+    if os.path.exists(path):
+        os.remove(path)
+    with open(path, 'wb') as file:
+        pickle.dump(out, file)
+    return
+
+def read_from_disk(path : str) -> dict:
+    with open(path, 'rb') as file:
+        out = pickle.load(file)
+    return out
+
+def write_to_iostream(out : dict, iostream : BytesIO) -> None:
+    assert type(iostream) is BytesIO
+    iostream.write(pickle.dumps(out))
+    return
+
+def read_from_iostream(iostream : BytesIO) -> dict:
+    out = pickle.loads(iostream.getvalue())
+    return out
 
 if __name__ == '__main__':
     pass
