@@ -20,6 +20,7 @@ from scipy.stats import norm as normal
 from scipy.stats import uniform
 
 from genpareto import gpd_fit
+from samplers import log_stickbreak
 
 # Tuples for storing priors
 
@@ -302,25 +303,6 @@ def pt_logd_dirichlet_mx_ma(
     out += np.einsum('nd,tjd->ntj', np.log(aY), aAlpha - 1)
     return out
 
-def pt_stickbreak(nu : npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
-    """
-    parallel tempered stickbreaking function.
-    nu : (T x (J-1))
-    out : (T x J)
-    """
-    out = np.zeros((nu.shape[0], nu.shape[1] + 1))
-    out[..., :-1] += np.log(nu)
-    out[..., 1: ] += np.cumsum(np.log(1 - nu), axis = -1)
-    # np.exp(out, out = out)
-    return softmax(out, axis = -1)
-
-def pt_log_stickbreak(nu : npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
-    """ Parallel Tempered stick-breaking function (log) """
-    out = np.zeros((nu.shape[0], nu.shape[1] + 1))
-    out[..., :-1] += np.log(nu)
-    out[..., 1: ] += np.cumsum(np.log(1 - nu), axis = -1)
-    return log_softmax(out, axis = -1)
-
 def pt_logd_mixprojgamma(
         aY     : npt.NDArray[np.float64], 
         aAlpha : npt.NDArray[np.float64], 
@@ -336,7 +318,7 @@ def pt_logd_mixprojgamma(
     N = aY.shape[0]
     T, J, D = aAlpha.shape
     
-    logpi = pt_log_stickbreak(nu)
+    logpi = log_stickbreak(nu)
     scratch = np.zeros((aY.shape[0], *aAlpha.shape[:-1])) # (N, ..., J)
     pt_logd_projgamma_my_mt_inplace_unstable(scratch, aY, aAlpha, aBeta)
     scratch += logpi[None]

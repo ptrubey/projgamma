@@ -177,9 +177,9 @@ class Adam(object):
         return
 
 class VariationalParameters(object):
-    zeta_mutau   : np.ndarray
+    zeta_mutau   : npt.NDArray[np.float64]
     zeta_adam    : Adam
-    alpha_mutau  : np.ndarray
+    alpha_mutau  : npt.NDArray[np.float64]
     alpha_adam   : Adam
 
     def __init__(self, S : int, J : int, **kwargs):
@@ -203,25 +203,25 @@ class Chain(StickBreakingSampler):
     curr_iter     : int
 
     @property
-    def curr_r(self):
+    def curr_r(self) -> npt.NDArray[np.float64]:
         return self.samples.r[-1]
     @property
-    def curr_chi(self):
+    def curr_chi(self) -> npt.NDArray[np.float64]:
         return self.samples.chi[-1]
     @property
-    def curr_delta(self):
+    def curr_delta(self) -> npt.NDArray[np.int32]:
         return self.samples.delta[-1]
     @property
-    def curr_alpha(self):
+    def curr_alpha(self) -> npt.NDArray[np.float64]:
         return lognormal(
             mean = self.varparm.alpha_mutau[0], 
             sigma = np.exp(self.varparm.alpha_mutau[1])
             )
     @property
-    def curr_beta(self):
+    def curr_beta(self) -> npt.NDArray[np.float64]:
         return self.samples.beta[-1]
     @property
-    def curr_zeta(self):
+    def curr_zeta(self) -> npt.NDArray[np.float64]:
         return lognormal(
             mean = self.varparm.zeta_mutau[0], 
             sigma = np.exp(self.varparm.zeta_mutau[1]),
@@ -229,11 +229,11 @@ class Chain(StickBreakingSampler):
     
     def update_zeta(
             self, 
-            delta : npt.NDArray, 
-            r     : np.ndarray, 
-            alpha : np.ndarray, 
-            beta  : np.ndarray,
-            ):
+            delta : npt.NDArray[np.int32], 
+            r     : npt.NDArray[np.float64], 
+            alpha : npt.NDArray[np.float64], 
+            beta  : npt.NDArray[np.float64],
+            ) -> None:
         dmat = delta[:,None] == np.arange(self.J)
         Y = r[:,None] * self.data.Yp
         n = dmat.sum(axis = 0)
@@ -252,9 +252,9 @@ class Chain(StickBreakingSampler):
     
     def update_alpha(
             self, 
-            zeta : np.ndarray, 
-            delta : np.ndarray,
-            ):
+            zeta  : npt.NDArray[np.float64], 
+            delta : npt.NDArray[np.float64],
+            ) -> None:
         active = np.where(np.bincount(delta, minlength = self.J) > 0)[0]
         n = np.array((active.shape[0],))
         lZs = np.log(zeta)[active].sum(axis = 0)
@@ -276,10 +276,10 @@ class Chain(StickBreakingSampler):
 
     def update_beta(
             self, 
-            zeta : np.ndarray, 
-            alpha : np.ndarray, 
-            delta : np.ndarray,
-            ):
+            zeta  : npt.NDArray[np.float64], 
+            alpha : npt.NDArray[np.float64], 
+            delta : npt.NDArray[np.int32],
+            ) -> None:
         active = np.where(np.bincount(delta, minlength = self.J) > 0)[0]
         n = active.shape[0]
         zs = zeta[active].sum(axis = 0)
@@ -288,7 +288,11 @@ class Chain(StickBreakingSampler):
         self.samples.beta.append(gamma(shape = As, scale = 1 / Bs))
         return
 
-    def update_r(self, zeta : np.ndarray, delta : np.ndarray):
+    def update_r(
+            self, 
+            zeta  : npt.NDArray[np.float64], 
+            delta : npt.NDArray[np.int32]
+            ) -> None:
         As = zeta[delta].sum(axis = -1)  # np.einsum('il->i', zeta[delta])
         Bs = self.data.Yp.sum(axis = -1) # np.einsum('il->i', self.data.Yp)
         r = gamma(shape = As, scale = 1 / Bs)
@@ -296,14 +300,18 @@ class Chain(StickBreakingSampler):
         self.samples.r.append(r)
         return
     
-    def update_chi(self, delta : np.ndarray):
+    def update_chi(self, delta : npt.NDArray[np.int32]) -> None:
         chi = py_sample_chi_bgsb(
             delta, self.discount, self.concentration, self.J,
             )
         self.samples.chi.append(chi)
         return
     
-    def update_delta(self, zeta : np.ndarray, chi : np.ndarray):
+    def update_delta(
+            self, 
+            zeta : npt.NDArray[np.float64], 
+            chi  : npt.NDArray[np.float64],
+            ) -> None:
         llk = np.zeros((self.N, self.J))
         logd_projgamma_my_mt_inplace_unstable(
             llk, self.data.Yp, zeta, np.ones(zeta.shape),
@@ -312,7 +320,7 @@ class Chain(StickBreakingSampler):
         self.samples.delta.append(delta)
         return
 
-    def iter_sample(self):
+    def iter_sample(self) -> None:
         chi   = self.curr_chi
         alpha = self.curr_alpha
         beta  = self.curr_beta
@@ -329,7 +337,7 @@ class Chain(StickBreakingSampler):
         self.update_beta(zeta, self.curr_alpha, self.curr_delta)
         return
 
-    def initialize_sampler(self, nSamp : int):
+    def initialize_sampler(self, nSamp : int) -> None:
         self.samples = Samples(self.gibbs_samp, self.N, self.S, self.J)
         self.varparm = VariationalParameters(
             self.S, self.J, niter = self.var_iter,
@@ -337,14 +345,14 @@ class Chain(StickBreakingSampler):
         self.curr_iter = 0
         pass
 
-    def set_projection(self):
+    def set_projection(self) -> None:
         self.data.Yp = (
             self.data.V.T / 
             (self.data.V ** self.p).sum(axis = 1)**(1/self.p)
             ).T
         return
     
-    def write_to_disk(self, path):
+    def write_to_disk(self, path) -> None:
         if type(path) is str:
             folder = os.path.split(path)[0]
             if not os.path.exists(folder):
@@ -390,6 +398,7 @@ class Chain(StickBreakingSampler):
             discount      : float = 0.1,
             ):
         self.data = data
+        assert len(self.data.cats) == 0
         self.N = self.data.nDat
         self.S = self.data.nCol
         self.J = max_clusters
@@ -404,12 +413,12 @@ class Chain(StickBreakingSampler):
         return
 
 class ResultSamples(Samples):
-    r     : np.ndarray
-    chi   : np.ndarray
-    delta : np.ndarray
-    beta  : np.ndarray
-    alpha : np.ndarray
-    zeta  : np.ndarray
+    r     : npt.NDArray[np.float64]
+    chi   : npt.NDArray[np.float64]
+    delta : npt.NDArray[np.int32]
+    beta  : npt.NDArray[np.float64]
+    alpha : npt.NDArray[np.float64]
+    zeta  : npt.NDArray[np.float64]
 
     def __init__(self, dict):
         self.r     = dict['rs']
@@ -429,7 +438,7 @@ class Result(object):
     S : int
     J : int
 
-    def generate_conditional_posterior_predictive_zetas(self):
+    def generate_conditional_posterior_predictive_zetas(self) -> npt.NDArray[np.float64]:
         zetas = np.swapaxes(np.array([
             zeta[delta]
             for zeta, delta
@@ -437,11 +446,11 @@ class Result(object):
             ]), 0, 1)
         return zetas
     
-    def generate_conditional_posterior_predictive_gammas(self):
+    def generate_conditional_posterior_predictive_gammas(self) -> npt.NDArray[np.float64]:
         zetas = self.generate_conditional_posterior_predictive_zetas()
         return gamma(shape = zetas)
     
-    def generate_posterior_predictive_zetas(self, n_per_sample = 10):
+    def generate_posterior_predictive_zetas(self, n_per_sample = 10) -> npt.NDArray[np.float64]:
         zetas = []
         probs = stickbreak(self.samples.chi)
         Sprob = np.cumsum(probs, axis = -1)
@@ -452,11 +461,11 @@ class Result(object):
         zetas = np.vstack(zetas)
         return(zetas)
     
-    def generate_posterior_predictive_gammas(self, n_per_sample = 10):
+    def generate_posterior_predictive_gammas(self, n_per_sample = 10) -> npt.NDArray[np.float64]:
         zetas = self.generate_posterior_predictive_zetas(n_per_sample)
         return gamma(shape = zetas)
 
-    def generate_posterior_predictive_hypercube(self, n_per_sample = 10):
+    def generate_posterior_predictive_hypercube(self, n_per_sample = 10) -> npt.NDArray[np.float64]:
         gammas = self.generate_posterior_predictive_gammas(n_per_sample)
         return euclidean_to_hypercube(gammas)
 
