@@ -1,35 +1,28 @@
+import numpy as np
+import numpy.typing as npt
 from numpy.random import choice, gamma, uniform, normal
 from scipy.stats import invwishart
 from numpy.linalg import cholesky, inv
 from collections import namedtuple
-from itertools import repeat, chain
-import numpy as np
-import numpy.typing as npt
-import pandas as pd
-import os
-import pickle
-from multiprocessing import Pool
-from energy import limit_cpu
 
 # np.seterr(invalid='raise')
-
 EPS = np.finfo(float).eps
 
 import cUtility as cu
 from samplers import ParallelTemperingStickBreakingSampler,                     \
-    bincount2D_vectorized, pt_py_sample_chi_bgsb, pt_py_sample_cluster_bgsb
+    bincount2D_vectorized, pt_py_sample_chi_bgsb, pt_py_sample_cluster_bgsb,    \
+    NormalPrior, InvWishartPrior, GEMPrior
 from data import Projection, Data, category_matrix, euclidean_to_catprob,       \
     euclidean_to_hypercube, euclidean_to_psphere, euclidean_to_simplex
-from projgamma import GammaPrior, NormalPrior, InvWishartPrior,                 \
-    pt_logd_cumdircategorical_mx_ma_inplace_unstable, pt_logd_mvnormal_mx_st,   \
-    logd_gamma_my, logd_mvnormal_mx_st, logd_invwishart_ms,                     \
+from projgamma import pt_logd_cumdircategorical_mx_ma_inplace_unstable,         \
+    pt_logd_mvnormal_mx_st, logd_mvnormal_mx_st, logd_invwishart_ms,            \
     pt_logd_cumdirmultinom_paired_yt, pt_logd_projgamma_my_mt_inplace_unstable, \
-    pt_logd_projgamma_paired_yt,                                                \
-    pt_logd_pareto_mx_ma_inplace_unstable, pt_logd_pareto_paired_yt
+    pt_logd_projgamma_paired_yt, pt_logd_pareto_mx_ma_inplace_unstable,         \
+    pt_logd_pareto_paired_yt
 from cov import PerObsTemperedOnlineCovariance
 
 Prior = namedtuple('Prior', 'mu Sigma chi')
-GEMPrior = namedtuple('GEMPrior', 'discount concentration')
+
 
 class Samples(object):
     zeta  = None
@@ -38,17 +31,49 @@ class Samples(object):
     delta = None
     chi   = None
 
-    def __init__(self, nSamp, nDat, tCol, nTemp, nTrunc):
-        """
-        nCol: number of 
-        nCat: number of categorical columns
-        nCats: number of categorical variables        
-        """
-        self.zeta  = np.empty((nSamp + 1, nTemp, nTrunc, tCol))
-        self.mu    = np.empty((nSamp + 1, nTemp, tCol))
-        self.Sigma = np.empty((nSamp + 1, nTemp, tCol, tCol))
-        self.delta = np.empty((nSamp + 1, nTemp, nDat), dtype = int)
-        self.chi   = np.empty((nSamp + 1, nTemp, nTrunc))
+    def to_dict(self, nBurn : int = 0, nThin : int = 1) -> dict:
+        out = {
+            'zeta'  : self.zeta[(nBurn+1)  :: nThin, 0],
+            'mu'    : self.mu[(nBurn+1)    :: nThin, 0],
+            'Sigma' : self.Sigma[(nBurn+1) :: nThin, 0],
+            'delta' : self.delta[(nBurn+1) :: nThin, 0], 
+            'chi'   : self.chi[(nBurn+1)   :: nThin, 0],
+            }
+        return out
+
+    @classmethod
+    def from_dict(cls, out):
+        return cls(**out)
+
+    @classmethod
+    def from_meta(
+            cls, 
+            nSamp : int, 
+            nDat : int, 
+            tCol : int, 
+            nTemp : int, 
+            nTrunc : int
+            ):
+        zeta  = np.empty((nSamp + 1, nTemp, nTrunc, tCol))
+        mu    = np.empty((nSamp + 1, nTemp, tCol))
+        Sigma = np.empty((nSamp + 1, nTemp, tCol, tCol))
+        delta = np.empty((nSamp + 1, nTemp, nDat), dtype = int)
+        chi   = np.empty((nSamp + 1, nTemp, nTrunc))
+        return cls(zeta, mu, Sigma, delta, chi)
+
+    def __init__(
+            self, 
+            zeta  : npt.NDArray[np.float64], 
+            mu    : npt.NDArray[np.float64], 
+            Sigma : npt.NDArray[np.float64], 
+            delta : npt.NDArray[np.int32], 
+            chi   : npt.NDArray[np.float64],
+            ):
+        self.zeta  = zeta
+        self.mu    = mu
+        self.Sigma = Sigma
+        self.delta = delta
+        self.chi   = chi
         return
 
 class Samples_(Samples):
@@ -425,37 +450,17 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
            self.try_tempering_swap()
         return
 
-    def write_to_disk(self, path : str, nBurn : int, nThin : int = 1) -> None:
-        folder = os.path.split(path)[0]
-        if not os.path.exists(folder):
-            os.mkdir(folder)
-        if os.path.exists(path):
-            os.remove(path)
-        # assemble data
-        deltas = self.samples.delta[(nBurn+1) :: nThin, 0]
-        zetas  = self.samples.zeta[(nBurn+1) :: nThin, 0]
-        mus    = self.samples.mu[(nBurn+1) :: nThin, 0]
-        Sigmas = self.samples.Sigma[(nBurn+1) :: nThin, 0]
-        chis   = self.samples.chi[(nBurn+1) :: nThin, 0]
-        # make output dictionary
+    def to_dict(self, nBurn : int = 0, nThin : int = 1) -> dict:
         out = {
-            'zetas'  : zetas,
-            'mus'    : mus,
-            'Sigmas' : Sigmas,
-            'deltas' : deltas,
-            'data'   : self.data.to_dict(),
-            'swap_y' : self.swap_succeeds,
-            'swap_n' : self.swap_attempts - self.swap_succeeds,
-            'swap_p' : self.swap_succeeds / (self.swap_attempts + 1e-9),
-            'GEM'    : tuple(self.priors.chi),
-            'chis'   : chis,
+            'data'    : self.data.to_dict(),
+            'samples' : self.samples.to_dict(),
+            'time'    : self.time_elapsed_numeric,
+            'swap_y'  : self.swap_succeeds,
+            'swap_p'  : self.swap_succeeds / (self.swap_attempts + 1e-9),
+            'priors'  : self.priors,
             'model_radius' : self.model_radius,
-            'time'   : self.time_elapsed_numeric,
             }
-        # write to disk
-        with open(path, 'wb') as file:
-            pickle.dump(out, file)
-        return
+        return out
     
     def categorical_considerations(self) -> None:
         """ Builds the CatMat """
@@ -465,8 +470,8 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
     def __init__(
             self,
             data,
-            prior_mu     = (0, 1.),
-            prior_Sigma  = (100, 1.),
+            prior_mu     = NormalPrior(0, 1.),
+            prior_Sigma  = InvWishartPrior(100, 1.),
             prior_chi    = (0.1, 1.),
             p            = 10,
             max_clust_count = 200,
@@ -719,69 +724,29 @@ class Result(object):
                 znew[i,s] = self.samples.zeta[s,dnew[i,s]]
         return znew
     
-    def load_data(self, path : str) -> None:        
-        with open(path, 'rb') as file:
-            out = pickle.load(file)
-        
-        deltas : npt.NDArray[np.int32] = out['deltas']
-        zetas  : npt.NDArray[np.float64] = out['zetas']
-        mus    : npt.NDArray[np.float64] = out['mus']
-        Sigmas : npt.NDArray[np.float64] = out['Sigmas']
-        chis   : npt.NDArray[np.float64] = out['chis']
-        
+    def load_data(self, out : dict) -> None:        
+        self.samples = Samples.from_dict(out['samples'])
         self.data = Data.from_dict(out['data'])
+        self.priors = out['priors']
         self.model_radius = out['model_radius']
-        self.nSamp  = deltas.shape[0]
-        self.nDat   = deltas.shape[1]
-        self.nCat   = self.data.nCat
-        self.nCol   = self.data.nCol
-        self.tCol   = self.nCol + self.nCat
+        self.time = out['time']
+        self.swap_y = out['swap_y']
+        self.swap_p = out['swap_p']
+        
+        self.nSamp, self.nDat = self.samples.delta.shape
+        self.nCat = self.data.nCat
+        self.nCol = self.data.nCol
+        self.tCol = self.nCol + self.nCat
         if self.model_radius: 
             self.tCol += 1
         self.nCats  = self.data.cats.shape[0]
         self.cats   = self.data.cats
         self.CatMat = category_matrix(self.data.cats)
-        
-        self.GEMPrior = GEMPrior(*out['GEM'])
-        self.max_clust_count = chis.shape[-1]
-        self.samples = Samples_(
-            self.nSamp, self.nDat, self.tCol, self.max_clust_count,
-            )
-        self.samples.delta = deltas
-        self.samples.mu    = mus
-        self.samples.Sigma = Sigmas
-        self.samples.chi   = chis
-        self.samples.zeta  = zetas
-
-        if 'swap_y' in out.keys():
-            self.swap_y = out['swap_y']
-            self.swap_n = out['swap_n']
-            self.swap_p = out['swap_p']
+        self.max_clust_count = self.samples.chi.shape[-1] + 1
         return
 
-    def __init__(self, path):
-        self.load_data(path)
-        return
-
-def argparser():
-    from argparse import ArgumentParser
-    p = ArgumentParser()
-    p.add_argument('in_data_path')
-    p.add_argument('out_path')
-    p.add_argument('cat_vars')
-    p.add_argument('--in_outcome_path', default = False)
-    p.add_argument('--decluster', default = 'False')
-    p.add_argument('--quantile', default = 0.95)
-    p.add_argument('--nSamp', default = 20000)
-    p.add_argument('--nKeep', default = 10000)
-    p.add_argument('--nThin', default = 10)
-    p.add_argument('--eta_alpha', default = 2.)
-    p.add_argument('--eta_beta', default = 1.)
-    return p.parse_args()
-
-class Heap(object):
-    def __init__(self, **kwargs):
-        self.__dict__.update(**kwargs)
+    def __init__(self, out : dict):
+        self.load_data(out)
         return
 
 if __name__ == '__main__':
@@ -810,6 +775,10 @@ if __name__ == '__main__':
     #     'eta_beta' : 1.,
     #     }
     # p = Heap(**d)
+    class Heap(object):
+        def __init__(self, **kwargs):
+            self.__dict__.update(kwargs)
+            return
     d = {
         'in_data_path' : './datasets/ivt_nov_mar.csv',
         'out_path'     : './test/results.pkl',

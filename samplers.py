@@ -26,7 +26,18 @@ from io import BytesIO
 EPS = np.finfo(float).eps
 MAX = np.finfo(float).max
 
+# Tuples for storing priors
+GammaPrior     = namedtuple('GammaPrior', 'a b')
+DirichletPrior = namedtuple('DirichletPrior', 'a')
+BetaPrior      = namedtuple('BetaPrior', 'a b')
+UniNormalPrior = namedtuple('UniNormalPrior','mu sigma')
+InvGammaPrior  = namedtuple('InvGammaPrior', 'a b')
+# LogNormal Models
+NormalPrior     = namedtuple('NormalPrior', 'mu SCho SInv')
+InvWishartPrior = namedtuple('InvWishartPrior', 'nu psi')
+# BNP Prior Related
 GEMPrior = namedtuple('GEMPrior', 'discount concentration')
+
 
 def bincount2D_vectorized(arr : npt.NDArray[np.int32], m : int) -> npt.NDArray[np.int32]:
     """

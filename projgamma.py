@@ -4,34 +4,19 @@ parameterized such that E(x) = alpha / beta (treat beta as rate parameter).
 """
 import numpy as np
 import numpy.typing as npt
-
 np.seterr(under = 'ignore', over = 'raise')
-from collections import namedtuple
-from contextlib import nullcontext
-from functools import lru_cache
-from math import acos, cos, exp, log, sin
 
-from numpy.linalg import inv, norm, slogdet
+from contextlib import nullcontext
+from math import exp, log
+from numpy.linalg import inv, slogdet
 from scipy.integrate import quad
-from scipy.special import gammainc, gammaln, multigammaln, loggamma, softmax,   \
-    log_softmax
+from scipy.special import gammainc, gammaln, multigammaln, loggamma
 from scipy.stats import gamma
 from scipy.stats import norm as normal
 from scipy.stats import uniform
 
 from genpareto import gpd_fit
-from samplers import log_stickbreak
-
-# Tuples for storing priors
-
-GammaPrior     = namedtuple('GammaPrior', 'a b')
-DirichletPrior = namedtuple('DirichletPrior', 'a')
-BetaPrior      = namedtuple('BetaPrior', 'a b')
-UniNormalPrior = namedtuple('UniNormalPrior','mu sigma')
-InvGammaPrior  = namedtuple('InvGammaPrior', 'a b')
-# LogNormal Models
-NormalPrior     = namedtuple('NormalPrior', 'mu SCho SInv')
-InvWishartPrior = namedtuple('InvWishartPrior', 'nu psi')
+from samplers import log_stickbreak, GammaPrior
 
 ## Functions related to projected gamma density
 
