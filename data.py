@@ -45,7 +45,10 @@ def euclidean_to_psphere(euc : npt.NDArray[np.float64], p : int = 10) -> npt.NDA
     Yp[Yp < EPS] = EPS
     return Yp
 
-def euclidean_to_catprob(euc : npt.NDArray[np.float64], catmat : npt.NDArray[np.bool_]) -> npt.NDArray[np.float64]:
+def euclidean_to_catprob(
+        euc : npt.NDArray[np.float64], 
+        catmat : npt.NDArray[np.bool_],
+        ) -> npt.NDArray[np.float64]:
     """ 
     Projects R_+^d to \prod_c S_1^{d_c -1}
 
@@ -552,7 +555,7 @@ class Data(DataBase):
             sphr : Spherical       = None,
             cate : Categorical     = None,
             dcls : bool            = False,
-            ):
+            ) -> Self:
         inputs = [xh1t, xh2t, sphr, rank, cate]
         filted = [x for x in inputs if x is not None]
         # Input Checking
@@ -627,7 +630,7 @@ class Data(DataBase):
             sphr_cols   : np.ndarray = np.array([], dtype = int), 
             cate_cols   : np.ndarray = np.array([], dtype = int), 
             cate_val    : list       = None,
-            ):
+            ) -> Self:
         """ data generation from raw, single table.  columns identified using C indexing. """
         # bounds checking:
         assert len(raw.shape) == 2
@@ -742,6 +745,9 @@ class Data(DataBase):
         return
 
 class Projection(object):
+    data : Data = None
+    p    : int  = None
+
     def set_projection(self):
         if self.data.V.shape[1] > 0:
             self.data.Yp = euclidean_to_psphere(self.data.V, self.p)
