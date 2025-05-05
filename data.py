@@ -9,6 +9,8 @@ from numpy.linalg import norm
 from math import pi, sqrt, exp
 from scipy.special import erf, erfinv
 from cdf import ECDF
+from __future__ import annotations
+from typing import Self
 
 EPS = np.finfo(float).eps
 MAX = np.finfo(float).max
@@ -513,7 +515,7 @@ class Data(DataBase):
         return d
     
     @classmethod
-    def from_dict(cls, d : dict):
+    def from_dict(cls, d : dict) -> Self:
         if 'xh1t' in d.keys():
             xh1t = Threshold_1Tail.from_dict(d['xh1t'])
         else:
