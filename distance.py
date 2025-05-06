@@ -1,19 +1,15 @@
 # Compute Distance / Divergence between Distributions
 import numpy as np
 import numpy.typing as npt
-import pandas as pd
 from typing import Any
-from collections import defaultdict, namedtuple
+from collections import defaultdict
 from math import log, sqrt
-from data import to_hypercube
 from sklearn.metrics import pairwise_distances
 
 def check_shape(data1 : npt.NDArray[Any], data2 : npt.NDArray[Any]) -> None:
-    try:
-        data1.shape[1] == data2.shape[1]
-    except AssertionError:
-        print('Data do not have same number of columns!')
-        raise
+    assert len(data1.shape) == 2
+    assert len(data2.shape) == 2
+    assert data1.shape[1] == data2.shape[1]
     return
 
 def make_density_dictionary_hypercube(
@@ -93,6 +89,29 @@ def total_variation_distance(
         m = max(m, abs(d1[key] - d2[key]))
 
     return m
+
+def hypercube_deviance_inner(
+        args : tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]],
+        ) -> npt.NDArray[np.float64]:
+    face1 = np.argmax(args[0])
+    face2 = np.argmax(args[1], axis = -1)
+    prime = args[1].copy()
+    # prime[np.arange(face2.shape[0]), face2] = 2 - 
+    raise NotImplementedError('Not Done Yet!')
+    pass
+
+def hypercube_deviance(
+        data1 : npt.NDArray[np.float64],
+        data2 : npt.NDArray[np.float64],
+        ) -> npt.NDArray[np.float64]:
+    """ Computes the upper bound on distance between samples from 
+    data 1 and data 2 """
+    check_shape(data1, data2) # verify shapes compatible
+    assert np.allclose(data1.max(axis = -1), 1.) # verify on hypercube
+    assert np.allclose(data2.max(axis = -1), 1.)
+
+
+
 
 def cdf_distance(
         data1 : npt.NDArray[np.float64], 
