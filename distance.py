@@ -1,10 +1,13 @@
 # Compute Distance / Divergence between Distributions
 import numpy as np
 import numpy.typing as npt
+from itertools import repeat
 from typing import Any
 from collections import defaultdict
 from math import log, sqrt
 from sklearn.metrics import pairwise_distances
+from multiprocessing import Pool, cpu_count
+from energy import limit_cpu
 
 def check_shape(data1 : npt.NDArray[Any], data2 : npt.NDArray[Any]) -> None:
     assert len(data1.shape) == 2
@@ -93,25 +96,41 @@ def total_variation_distance(
 def hypercube_deviance_inner(
         args : tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]],
         ) -> npt.NDArray[np.float64]:
-    face1 = np.argmax(args[0])
-    face2 = np.argmax(args[1], axis = -1)
+    """
+    Computes Euclidean distance between 
+    """
+    # face. indexes which face an obsv. falls on.
+    face1 = np.argmax(args[0])              # target
+    face2 = np.argmax(args[1], axis = -1)   # samples
+    # Rotate samples into target's plane
     prime = args[1].copy()
-    # prime[np.arange(face2.shape[0]), face2] = 2 - 
-    raise NotImplementedError('Not Done Yet!')
-    pass
+    prime[:, face1] = 2. - prime[:,face2]
+    prime[:, face2] = 1.
+    # compute euclidean distance to target.
+    prime -= args[0]
+    prime *= prime
+    return prime.sum(axis = -1)**0.5
 
 def hypercube_deviance(
         data1 : npt.NDArray[np.float64],
         data2 : npt.NDArray[np.float64],
         ) -> npt.NDArray[np.float64]:
-    """ Computes the upper bound on distance between samples from 
-    data 1 and data 2 """
+    """ 
+    1: Verifies applicability of distance metric.
+    2: Computes the upper bound on geodesic distance between samples from 
+        data1 and data2.
+    - For each obs from data1, rotates data2 into the same plane as obs, 
+        and computes Euclidean distance between obs and data2^prime.
+    """
     check_shape(data1, data2) # verify shapes compatible
     assert np.allclose(data1.max(axis = -1), 1.) # verify on hypercube
     assert np.allclose(data2.max(axis = -1), 1.)
-
-
-
+    args = zip(data1, repeat(data2))
+    with Pool(processes = cpu_count(), initializer = limit_cpu) as pool:
+        res = pool.map(hypercube_deviance_inner, args)
+        pool.close()
+        pool.join()
+    return np.array(list(res))
 
 def cdf_distance(
         data1 : npt.NDArray[np.float64], 
