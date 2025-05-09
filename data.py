@@ -9,7 +9,6 @@ from numpy.linalg import norm
 from math import pi, sqrt, exp
 from scipy.special import erf, erfinv
 from cdf import ECDF
-from __future__ import annotations
 from typing import Self
 
 EPS = np.finfo(float).eps
@@ -34,7 +33,7 @@ def euclidean_to_simplex(euc : npt.NDArray[np.float64]) -> npt.NDArray[np.float6
 
         # self.pool = get_context('spawn').Pool(
 def euclidean_to_hypercube(euc : npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
-    """ Project R_+^d to S_{\infty}^{d-1}"""
+    """ Project R_+^d to S_{infty}^{d-1}"""
     V = (euc + EPS) / (euc + EPS).max(axis = -1)[...,None]
     V[V < EPS] = EPS
     return V
@@ -50,7 +49,7 @@ def euclidean_to_catprob(
         catmat : npt.NDArray[np.bool_],
         ) -> npt.NDArray[np.float64]:
     """ 
-    Projects R_+^d to \prod_c S_1^{d_c -1}
+    Projects R_+^d to prod_c S_1^{d_c -1}
 
     euc    : (n,s,d) or (s,d)
     catmat : (c,d)

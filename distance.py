@@ -104,8 +104,8 @@ def hypercube_deviance_inner(
     face2 = np.argmax(args[1], axis = -1)   # samples
     # Rotate samples into target's plane
     prime = args[1].copy()
-    prime[:, face1] = 2. - prime[:,face2]
-    prime[:, face2] = 1.
+    prime[np.arange(prime.shape[0]), face2] = 2. - prime[np.arange(prime.shape[0]), face1]
+    prime[:, face1] = 1.
     # compute euclidean distance to target.
     prime -= args[0]
     prime *= prime
@@ -114,6 +114,7 @@ def hypercube_deviance_inner(
 def hypercube_deviance(
         data1 : npt.NDArray[np.float64],
         data2 : npt.NDArray[np.float64],
+        parallel : bool = True,
         ) -> npt.NDArray[np.float64]:
     """ 
     1: Verifies applicability of distance metric.
@@ -123,13 +124,16 @@ def hypercube_deviance(
         and computes Euclidean distance between obs and data2^prime.
     """
     check_shape(data1, data2) # verify shapes compatible
-    assert np.allclose(data1.max(axis = -1), 1.) # verify on hypercube
+    assert np.allclose(data1.max(axis = -1), 1.) # verify data on hypercube
     assert np.allclose(data2.max(axis = -1), 1.)
     args = zip(data1, repeat(data2))
-    with Pool(processes = cpu_count(), initializer = limit_cpu) as pool:
-        res = pool.map(hypercube_deviance_inner, args)
-        pool.close()
-        pool.join()
+    if parallel:
+        with Pool(processes = cpu_count(), initializer = limit_cpu) as pool:
+            res = pool.map(hypercube_deviance_inner, args)
+            pool.close()
+            pool.join()
+    else:
+        res = [hypercube_deviance_inner(arg) for arg in args]
     return np.array(list(res))
 
 def cdf_distance(
@@ -196,6 +200,14 @@ def energy_score(
     return 0.5 * PR.mean() - GF.mean()
 
 if __name__ == '__main__':
+    # from numpy.random import gamma
+    # from data import euclidean_to_hypercube
+    # from hypercube_deviance import hcdev
+
+    # x = gamma(5, 1, size = (20, 4)); y = gamma(5, 1, size = (20, 4))
+    # xh = euclidean_to_hypercube(x); yh = euclidean_to_hypercube(y)
+    # d1 = hypercube_deviance(xh, yh)
+    # d2 = pairwise_distances(xh, yh, metric = hcdev)
     pass
 
 # EOF
