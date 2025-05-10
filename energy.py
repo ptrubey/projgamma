@@ -4,7 +4,6 @@ import os
 from multiprocessing import Pool, cpu_count, pool as mcpool
 from itertools import repeat
 from sklearn.metrics import pairwise_distances
-from hypercube_deviance import hcdev
 
 def hypercube_distance_unsummed(args):
     return pairwise_distances(args[0], args[1].reshape(1,-1), metric = hcdev)
@@ -91,36 +90,6 @@ def intrinsic_energy_score(dataset):
     pool.join()
     del pool
     return np.array(list(res2)).mean() - 0.5 * res1
-
-def knn_distance(X, k, metric):
-    distance = pairwise_distances(X, metric = metric)
-    knn_dist = np.empty((X.shape[0], k))
-    for i in range(X.shape[0]):
-        knn_dist[i] = np.sort(distance[i])[1 : k + 1] # distance to itself is always 0...
-    return knn_dist
-
-def knnx_distance(X, Y, k, metric):
-    xdistance = pairwise_distances(X, Y, metric = metric)
-    knnx_dist = np.empty((X.shape[0], k))
-    for i in range(X.shape[0]):
-        knnx_dist[i] = np.sort(xdistance[i])[:k]
-    return knnx_dist
-
-def knn_kl_divergence(empirical, postpred, k = 10, metric = hcdev):
-    """ Implements FNN::KL.divergence in python -- Some remaining issues.  Numbers don't match
-        for Euclidean pairwise Distances. """
-    d1 = knn_distance(empirical, k, metric)
-    d2 = knnx_distance(empirical, postpred, k, metric)
-
-    n, p = empirical.shape
-    m    = postpred.shape[0]
-
-    kld = np.log(m/n) + p * (np.log(d2).mean(axis = 0) - np.log(d1).mean(axis = 0))
-    return kld
-
-def kl_divergence_knn(empirical, postpred, k = 2, metric = hcdev):
-    distance = pairwise_distances(empirical, )
-    pass
 
 def postpred_loss_single(predicted, empirical):
     """
