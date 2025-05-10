@@ -1,7 +1,7 @@
 # Compute Distance / Divergence between Distributions
 import numpy as np
 import numpy.typing as npt
-from itertools import repeat
+from itertools import repeat, batched
 from typing import Any
 from collections import defaultdict
 from math import log, sqrt
@@ -97,7 +97,8 @@ def hypercube_deviance_inner(
         args : tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]],
         ) -> npt.NDArray[np.float64]:
     """
-    Computes Euclidean distance between 
+    Computes Euclidean distance between *a* target and a set of samples,
+        rotated into the same plane as the target.
     """
     # face. indexes which face an obsv. falls on.
     face1 = np.argmax(args[0])              # target
@@ -111,6 +112,19 @@ def hypercube_deviance_inner(
     prime *= prime
     return prime.sum(axis = -1)**0.5
 
+def hypercube_deviance_batches(
+        args : tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]],
+        ) -> npt.NDArray[np.float64]:
+    """
+    Same as hypercube_deviance(...), except meant to be pushed batches of
+        targets in arg[0].
+    """
+    res = [
+        hypercube_deviance_inner(target, args[1]) 
+        for target in args[0]
+        ]
+    return np.array(res)
+
 def hypercube_deviance(
         data1 : npt.NDArray[np.float64],
         data2 : npt.NDArray[np.float64],
@@ -123,18 +137,19 @@ def hypercube_deviance(
     - For each obs from data1, rotates data2 into the same plane as obs, 
         and computes Euclidean distance between obs and data2^prime.
     """
-    check_shape(data1, data2) # verify shapes compatible
+    check_shape(data1, data2)                    # verify shapes compatible
     assert np.allclose(data1.max(axis = -1), 1.) # verify data on hypercube
     assert np.allclose(data2.max(axis = -1), 1.)
-    args = zip(data1, repeat(data2))
+    nbatch = data1.shape[0] // cpu_count() + 1   # number of obsv. per batch
+    args = zip(batched(data1,nbatch), repeat(data2))
     if parallel:
         with Pool(processes = cpu_count(), initializer = limit_cpu) as pool:
-            res = pool.map(hypercube_deviance_inner, args)
+            res = pool.map(hypercube_deviance_batches, args)
             pool.close()
             pool.join()
     else:
-        res = [hypercube_deviance_inner(arg) for arg in args]
-    return np.array(list(res))
+        res = [hypercube_deviance_batches(arg) for arg in args]
+    return np.vstack(list(res))
 
 def cdf_distance(
         data1 : npt.NDArray[np.float64], 
