@@ -496,11 +496,12 @@ class Data(DataBase):
 
     dcls = None
 
-    Z = None
-    W = None
-    V = None
-    R = None
-    I = None
+    Z : npt.NDArray[np.float64]
+    W : npt.NDArray[np.float64]
+    V : npt.NDArray[np.float64] 
+    R : npt.NDArray[np.float64]
+    I : npt.NDArray[np.float64]
+    Yp : npt.NDArray[np.float64]
     
     cats = None
     nCat = None

@@ -2,7 +2,7 @@ import numpy as np
 import numpy.typing as npt
 np.seterr(divide='raise', over = 'raise', under = 'ignore', invalid = 'raise')
 
-from numpy.random import choice, gamma, uniform
+from numpy.random import choice, gamma, uniform, beta
 from itertools import repeat
 from collections import namedtuple
 from scipy.special import gammaln
@@ -10,39 +10,28 @@ from typing import Self
 
 from samplers import StickBreakingSampler, py_sample_chi_bgsb, py_sample_cluster_bgsb
 from projgamma import sample_alpha_1_mh, sample_alpha_k_mh
-from data import Data, euclidean_to_hypercube
+from data import Data, Projection, euclidean_to_hypercube
 from projgamma import GammaPrior, logd_prodgamma_my_mt, logd_prodgamma_paired,  \
-    logd_prodgamma_my_st, logd_gamma
-
-def update_zeta_j_wrapper(args):
-    # parse arguments
-    curr_zeta_j, n_j, Y_js, lY_js, alpha, beta = args
-    prop_zeta_j = np.empty(curr_zeta_j.shape)
-    for i in range(curr_zeta_j.shape[0]):
-        prop_zeta_j[i] = sample_alpha_1_mh_summary(
-            curr_zeta_j[i], n_j, Y_js[i], lY_js[i], alpha[i], beta[i],
-            )
-    return prop_zeta_j
-
-def sample_gamma_shape_wrapper(args):
-    return sample_alpha_k_mh_summary(*args)
+    logd_prodgamma_my_st, logd_projgamma_my_mt, logd_gamma
 
 Prior = namedtuple('Prior', 'alpha beta')
 
 class Samples(object):
-    zeta  = None
-    alpha = None
-    beta  = None
-    delta = None
-    r     = None
+    zeta  : npt.NDArray[np.float64] = None
+    alpha : npt.NDArray[np.float64] = None
+    beta  : npt.NDArray[np.float64] = None
+    chi   : npt.NDArray[np.float64] = None
+    r     : npt.NDArray[np.float64] = None
+    delta : npt.NDArray[np.int32]   = None
 
     def to_dict(self, nBurn, nThin) -> dict:
         out = {
-            'zeta'  : self.samples.zeta[nBurn :: nThin],
-            'alpha' : self.samples.alpha[nBurn :: nThin],
-            'beta'  : self.samples.beta[nBurn :: nThin],
-            'delta' : self.samples.delta[nBurn :: nThin],
-            'r'     : self.samples.r[nBurn :: nThin],
+            'zeta'  : self.zeta[nBurn :: nThin],
+            'alpha' : self.alpha[nBurn :: nThin],
+            'beta'  : self.beta[nBurn :: nThin],
+            'chi'   : self.chi[nBurn :: nThin],
+            'delta' : self.delta[nBurn :: nThin],
+            'r'     : self.r[nBurn :: nThin],
             }
         return out
     
@@ -51,59 +40,83 @@ class Samples(object):
         return cls(**out)
 
     @classmethod
-    def from_parameters(cls, nSamp, nDat, nCol, nClust) -> Self:
+    def from_parameters(
+            cls, 
+            nSamp  : int, 
+            nDat   : int, 
+            nCol   : int, 
+            nClust : int,
+            ) -> Self:
         params = {
             'zeta'  : np.empty((nSamp + 1, nClust, nCol)),
             'alpha' : np.empty((nSamp + 1, nCol)),
             'beta'  : np.empty((nSamp + 1, nCol)),
+            'chi'   : np.empty((nSamp + 1, nClust - 1)),
             'delta' : np.empty((nSamp + 1, nDat), dtype = int),
             'r'     : np.empty((nSamp + 1, nDat)),
             }
         return cls.from_dict(params)
     
-    def __init__(self, zeta, alpha, beta, delta, r):
+    def __init__(
+            self, 
+            zeta  : npt.NDArray[np.float64], 
+            alpha : npt.NDArray[np.float64], 
+            chi   : npt.NDArray[np.float64], 
+            beta  : npt.NDArray[np.float64], 
+            delta : npt.NDArray[np.int32], 
+            r     : npt.NDArray[np.float64],
+            ):
         self.zeta  = zeta
         self.alpha = alpha
         self.beta  = beta
+        self.chi   = chi
         self.delta = delta
         self.r     = r
         return
 
-class Chain(StickBreakingSampler):
-    concentration = None
-    discount      = None
+class Chain(StickBreakingSampler, Projection):
+    data          : Data
+    concentration : float
+    discount      : float
 
     @property
-    def curr_zeta(self):
+    def curr_zeta(self) -> npt.NDArray[np.float64]:
         return self.samples.zeta[self.curr_iter]
     @property
-    def curr_alpha(self):
+    def curr_alpha(self) -> npt.NDArray[np.float64]:
         return self.samples.alpha[self.curr_iter]
     @property
-    def curr_beta(self):
+    def curr_beta(self) -> npt.NDArray[np.float64]:
         return self.samples.beta[self.curr_iter]
     @property
-    def curr_r(self):
+    def curr_r(self) -> npt.NDArray[np.float64]:
         return self.samples.r[self.curr_iter]
     @property
-    def curr_delta(self):
+    def curr_delta(self) -> npt.NDArray[np.int32]:
         return self.samples.delta[self.curr_iter]
-    
-    def clean_delta_zeta(self, delta, zeta):
+    @property
+    def curr_chi(self) -> npt.NDArray[np.float64]:
+        return self.samples.chi[self.curr_iter]
+   
+    def sample_alpha(
+            self,
+            delta : npt.NDArray[np.int32], 
+            zeta  : npt.NDArray[np.float64], 
+            alpha : npt.NDArray[np.float64],
+            ) -> npt.NDArray[np.float64]:
+        """ 
+        Samples hierarchical shape parameter for zeta.
+            assumes rate parameter integrated out.
         """
-        delta : cluster indicator vector (n)
-        zeta  : cluster parameter matrix (J* x d)
-        sigma : cluster parameter matrix (J* x d)
-        """
-        # reindex those clusters
-        keep, delta[:] = np.unique(delta, return_inverse = True)
-        # return new indices, cluster parameters associated with populated clusters
-        return delta, zeta[keep]
+        azeta = zeta[np.unique(delta)]
+        n = azeta.shape
+        zs = azeta.sum(axis = 0)
+        lzs = np.log(zeta).sum(axis = 0)
+        raise NotImplementedError('Fix this!')
+        logalpha = np.log(alpha)
 
-    def sample_zeta_new(self, alpha, beta, m):
-        return gamma(shape = alpha, scale = 1/beta, size = (m, self.nCol))
-    
-    def sample_alpha(self, zeta, curr_alpha):
+
+        raise NotImplementedError('Fix this!')
         n    = zeta.shape[0]
         zs   = zeta.sum(axis = 0)
         lzs  = np.log(zeta).sum(axis = 0)
@@ -115,45 +128,98 @@ class Chain(StickBreakingSampler):
         res = map(sample_gamma_shape_wrapper, args)
         return np.array(list(res))
 
-    def sample_beta(self, zeta, alpha):
+    def sample_beta(
+            self, 
+            delta : npt.NDArray[np.int32],
+            zeta  : npt.NDArray[np.float64], 
+            alpha : npt.NDArray[np.float64],
+            ) -> npt.NDArray[np.float64]:
+        """
+        Samples hierarchical rate parameter for zeta.
+        """
+        raise NotImplementedError('Fix This!')
         n = zeta.shape[0]
         zs = zeta.sum(axis = 0)
         As = n * alpha + self.priors.beta.a
         Bs = zs + self.priors.beta.b
         return gamma(shape = As, scale = 1 / Bs)
 
-    def sample_r(self, delta, zeta):
-        As = np.einsum('il->i', zeta[delta])
-        Bs = np.einsum('il->i', self.data.Yp)
-        return gamma(shape = As, scale = 1 / Bs)
-    
-    def sample_zeta(self, curr_zeta, r, delta, alpha, beta):
+    def sample_zeta(
+            self, 
+            delta : npt.NDArray[np.int32],
+            r     : npt.NDArray[np.float64], 
+            zeta  : npt.NDArray[np.float64], 
+            alpha : npt.NDArray[np.float64], 
+            beta  : npt.NDArray[np.float64],
+            ) -> npt.NDArray[np.float64]:
+        """ 
+        Samples shape parameters for projected (restricted) gamma.
+        """
+        raise NotImplementedError('Fix This!')
         dmat = delta[:,None] == np.arange(delta.max() + 1)
         Y    = r[:,None] * self.data.Yp
         n    = dmat.sum(axis = 0)
         Ysv  = (Y.T @ dmat).T
         lYsv = (np.log(Y).T @ dmat).T
         args = zip(
-            curr_zeta, n, Ysv, lYsv, 
+            zeta, n, Ysv, lYsv, 
             repeat(alpha), repeat(beta),
             )
         res = map(update_zeta_j_wrapper, args)
         return np.array(list(res))
+
+    def sample_r(
+            self, 
+            delta : npt.NDArray[np.int32], 
+            zeta  : npt.NDArray[np.float64],
+            ) -> npt.NDArray[np.float64]:
+        """
+        samples latent radii to recover independent gammas
+        representation of projected (restricted) gamma.
+        """
+        As = np.einsum('il->i', zeta[delta])
+        Bs = np.einsum('il->i', self.data.Yp)
+        return gamma(shape = As, scale = 1 / Bs)
     
+    def sample_chi(
+            self, 
+            delta : npt.NDArray[np.int32], 
+            ) -> npt.NDArray[np.float64]:
+        """
+        Samples stick-breaking unnormalized cluster weights.
+        """
+        return py_sample_chi_bgsb(
+            delta, self.discount, self.concentration, self.max_clust_count,
+            )
+    
+    def sample_delta(
+            self,
+            chi,
+            zeta,
+            ) -> npt.NDArray[np.int32]:
+        """
+        Samples latent cluster identifiers
+        """
+        ll = logd_projgamma_my_mt(self.data.Yp, zeta)
+        return py_sample_cluster_bgsb(chi, ll)
+
     def initialize_sampler(self, ns):
         self.samples = Samples(ns, self.nDat, self.nCol)
         self.samples.alpha[0] = 1.
         self.samples.beta[0] = 1.
         self.samples.zeta[0] = gamma(
             shape = 2., scale = 2., 
-            size = (self.max_clust_count - 30, self.nCol)
+            size = (self.max_clust_count, self.nCol)
             )
-        self.samples.delta[0] = choice(self.max_clust_count - 30, size = self.nDat)
-        self.samples.delta[0][-1] = np.arange(self.max_clust_count - 30)[-1] # avoids an error in initialization
+        self.samples.chi[0] = beta(
+            1 - self.discount, 
+            self.concentration + self.discount * np.arange(1, self.max_clust_count),
+            )
+        self.samples.delta[0] = self.sample_delta(self.samples.chi[0])
         self.samples.r[0] = self.sample_r(self.samples.delta[0], self.samples.zeta[0])
         self.curr_iter = 0
-        self.sigma_ph1 = np.ones((self.max_clust_count, self.nCol))
-        self.sigma_ph2 = np.ones((self.nDat, self.nCol))
+        # self.sigma_ph1 = np.ones((self.max_clust_count, self.nCol))
+        # self.sigma_ph2 = np.ones((self.nDat, self.nCol))
         return
     
     def record_log_density(self):
@@ -172,6 +238,7 @@ class Chain(StickBreakingSampler):
         return
 
     def iter_sample(self):
+        raise NotImplementedError('Fix this!')
         # current cluster assignments; number of new candidate clusters
         delta = self.curr_delta.copy();  m = self.max_clust_count - (delta.max() + 1)
         alpha = self.curr_alpha
@@ -183,7 +250,7 @@ class Chain(StickBreakingSampler):
         # Log-density for product of Gammas
         log_likelihood = logd_prodgamma_my_mt(r[:,None] * self.data.Yp, zeta, self.sigma_ph1)
         # pre-generate uniforms to inverse-cdf sample cluster indices
-        unifs   = uniform(size = self.nDat)
+        unifs = uniform(size = self.nDat)
         # Sample new cluster membership indicators 
         delta = pityor_cluster_sampler(
             delta, log_likelihood, unifs, self.concentration, self.discount,
@@ -206,6 +273,8 @@ class Chain(StickBreakingSampler):
             'samples' : self.samples.to_dict(nBurn, nThin),
             'data'    : self.data.to_dict(),
             'prior'   : self.priors,
+            'conc'    : self.concentration,
+            'disc'    : self.discount
             }
         return out 
 
@@ -252,10 +321,6 @@ class Chain(StickBreakingSampler):
             with open(path, 'wb') as file:
                 pickle.dump(out, file)
 
-        return
-
-    def set_projection(self):
-        self.data.Yp = (self.data.V.T / (self.data.V**self.p).sum(axis = 1)**(1/self.p)).T
         return
 
     def __init__(

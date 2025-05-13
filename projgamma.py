@@ -195,6 +195,37 @@ def pt_logd_projgamma_my_mt(
     np.nan_to_num(ld, False, -np.inf)
     return ld
 
+def logd_projresgamma_my_mt(
+        aY: npt.NDArray[np.float64],
+        aAlpha : npt.NDArray[np.float64],
+        ):
+    """
+    Projected (Restricted) Gamma Log-Density (Proportional)
+        for Multiple Y, Multiple Theta
+    ---
+    Inputs:
+        aY     : Array of Y     (n,d);   note: [Y in S_p^{d-1}]
+        aAlpha : array of Alpha (j,d);
+    Outputs:
+        Log-density (n, j)
+    """
+    assert len(aY.shape) == 2
+    assert len(aAlpha.shape) == 2
+    assert aAlpha.shape[1] == aY.shape[1]
+
+    n = aY.shape[0]; j,d = aAlpha.shape
+    aSum = aAlpha.sum(axis = -1)
+    ld = np.zeros((n,j))
+    raise NotImplementedError('Fix this!')
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        ld -= loggamma(aAlpha).sum(axis = -1)
+        ld += np.einsum('nd,jd->nj', np.log(aY), aAlpha - 1)
+        ld += aSum
+
+
+
+
+
 def pt_logd_projgamma_my_mt_inplace_unstable(
         out    : npt.NDArray[np.float64], 
         aY     : npt.NDArray[np.float64], 
