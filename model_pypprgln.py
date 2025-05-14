@@ -23,7 +23,6 @@ from cov import PerObsTemperedOnlineCovariance
 
 Prior = namedtuple('Prior', 'mu Sigma chi')
 
-
 class Samples(object):
     zeta  = None
     mu    = None
@@ -454,10 +453,10 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
         out = {
             'data'    : self.data.to_dict(),
             'samples' : self.samples.to_dict(),
+            'priors'  : self.priors,
             'time'    : self.time_elapsed_numeric,
             'swap_y'  : self.swap_succeeds,
             'swap_p'  : self.swap_succeeds / (self.swap_attempts + 1e-9),
-            'priors'  : self.priors,
             'model_radius' : self.model_radius,
             }
         return out

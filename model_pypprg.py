@@ -1,20 +1,16 @@
 import numpy as np
 import numpy.typing as npt
 np.seterr(divide='raise', over = 'raise', under = 'ignore', invalid = 'raise')
-
-from numpy.random import choice, gamma, uniform, beta
-from itertools import repeat
+from numpy.random import gamma, uniform, beta, normal
 from collections import namedtuple
-from scipy.special import gammaln
 from typing import Self
 
-from samplers import StickBreakingSampler, py_sample_chi_bgsb, py_sample_cluster_bgsb
-from projgamma import sample_alpha_1_mh, sample_alpha_k_mh
+from samplers import GEMPrior, GammaPrior, StickBreakingSampler,              \
+    py_sample_chi_bgsb, py_sample_cluster_bgsb
+from projgamma import log_fc_log_alpha_1_summary, log_fc_log_alpha_k_summary, \
+    pt_logd_projgamma_my_mt
 from data import Data, Projection, euclidean_to_hypercube
-from projgamma import GammaPrior, logd_prodgamma_my_mt, logd_prodgamma_paired,  \
-    logd_prodgamma_my_st, logd_projgamma_my_mt, logd_gamma
-
-Prior = namedtuple('Prior', 'alpha beta')
+Prior = namedtuple('Prior', 'alpha beta chi')
 
 class Samples(object):
     zeta  : npt.NDArray[np.float64] = None
@@ -75,9 +71,11 @@ class Samples(object):
         return
 
 class Chain(StickBreakingSampler, Projection):
+    samples       : Samples
     data          : Data
     concentration : float
     discount      : float
+    priors        : Prior[GammaPrior, GammaPrior, GEMPrior]
 
     @property
     def curr_zeta(self) -> npt.NDArray[np.float64]:
@@ -106,27 +104,23 @@ class Chain(StickBreakingSampler, Projection):
             ) -> npt.NDArray[np.float64]:
         """ 
         Samples hierarchical shape parameter for zeta.
-            assumes rate parameter integrated out.
+            assumes rate parameter (beta) integrated out.
         """
-        azeta = zeta[np.unique(delta)]
-        n = azeta.shape
-        zs = azeta.sum(axis = 0)
-        lzs = np.log(zeta).sum(axis = 0)
-        raise NotImplementedError('Fix this!')
-        logalpha = np.log(alpha)
-
-
-        raise NotImplementedError('Fix this!')
-        n    = zeta.shape[0]
-        zs   = zeta.sum(axis = 0)
-        lzs  = np.log(zeta).sum(axis = 0)
-        args = zip(
-            curr_alpha, repeat(n), zs, lzs,
-            repeat(self.priors.alpha.a), repeat(self.priors.alpha.b),
-            repeat(self.priors.beta.a), repeat(self.priors.beta.b),
+        active_zeta = zeta[np.unique(delta)]
+        n = active_zeta.shape[0]
+        zs = active_zeta.sum(axis = 0)
+        lzs = np.log(active_zeta).sum(axis = 0)
+        la_curr = np.log(alpha)
+        la_cand = np.log(alpha) + normal(scale = 0.15, size = alpha.shape)
+        lfc_curr = log_fc_log_alpha_k_summary(
+            la_curr, np.array(n), zs, lzs, self.priors.alpha, self.priors.beta,
             )
-        res = map(sample_gamma_shape_wrapper, args)
-        return np.array(list(res))
+        lfc_cand = log_fc_log_alpha_k_summary(
+            la_cand, np.array(n), zs, lzs, self.priors.alpha, self.priors.beta,
+            )
+        accept = np.log(uniform(size = alpha.shape)) < (lfc_cand - lfc_curr)
+        la_curr[accept] = la_cand[accept]
+        return np.exp(la_curr)
 
     def sample_beta(
             self, 
@@ -137,9 +131,9 @@ class Chain(StickBreakingSampler, Projection):
         """
         Samples hierarchical rate parameter for zeta.
         """
-        raise NotImplementedError('Fix This!')
-        n = zeta.shape[0]
-        zs = zeta.sum(axis = 0)
+        active_zeta = zeta[np.unique(delta)]
+        n = active_zeta.shape[0]
+        zs = active_zeta.sum(axis = 0)
         As = n * alpha + self.priors.beta.a
         Bs = zs + self.priors.beta.b
         return gamma(shape = As, scale = 1 / Bs)
@@ -155,18 +149,27 @@ class Chain(StickBreakingSampler, Projection):
         """ 
         Samples shape parameters for projected (restricted) gamma.
         """
-        raise NotImplementedError('Fix This!')
-        dmat = delta[:,None] == np.arange(delta.max() + 1)
+        dmat = delta[:,None] == np.arange(self.max_clust_count)
         Y    = r[:,None] * self.data.Yp
         n    = dmat.sum(axis = 0)
-        Ysv  = (Y.T @ dmat).T
-        lYsv = (np.log(Y).T @ dmat).T
-        args = zip(
-            zeta, n, Ysv, lYsv, 
-            repeat(alpha), repeat(beta),
+        Ys  = (Y.T @ dmat).T
+        lYs = (np.log(Y).T @ dmat).T
+        lz_curr = np.log(zeta)
+        lz_cand = lz_curr + normal(scale = 0.2, size = lz_curr.shape)
+
+        lfc_curr = log_fc_log_alpha_1_summary(lz_curr, n[:,None], Ys, lYs, alpha, beta)
+        lfc_cand = log_fc_log_alpha_1_summary(lz_cand, n[:,None], Ys, lYs, alpha, beta)
+
+        accept = np.log(uniform(size = alpha.shape)) < lfc_cand - lfc_curr
+        accept = uniform(size = alpha.shape) < np.exp(lfc_cand - lfc_curr)
+        lz_curr[accept] = lz_cand[accept]
+        z_new = np.exp(lz_curr)
+        
+        resamp = (n == 0)
+        z_new[resamp] = gamma(
+            shape = alpha, scale = 1 / beta, size = z_new[resamp].shape,
             )
-        res = map(update_zeta_j_wrapper, args)
-        return np.array(list(res))
+        return z_new
 
     def sample_r(
             self, 
@@ -189,22 +192,26 @@ class Chain(StickBreakingSampler, Projection):
         Samples stick-breaking unnormalized cluster weights.
         """
         return py_sample_chi_bgsb(
-            delta, self.discount, self.concentration, self.max_clust_count,
+            delta,
+            disc = self.priors.chi.discount,
+            conc = self.priors.chi.concentration,
+            trunc = self.max_clust_count,
             )
     
     def sample_delta(
             self,
-            chi,
-            zeta,
+            chi  : npt.NDArray[np.float64],
+            zeta : npt.NDArray[np.float64],
             ) -> npt.NDArray[np.int32]:
         """
         Samples latent cluster identifiers
         """
-        ll = logd_projgamma_my_mt(self.data.Yp, zeta)
+        ll = pt_logd_projgamma_my_mt(self.data.Yp, zeta)
         return py_sample_cluster_bgsb(chi, ll)
 
-    def initialize_sampler(self, ns):
-        self.samples = Samples(ns, self.nDat, self.nCol)
+    def initialize_sampler(self, ns) -> None:
+        self.curr_iter = 0
+        self.samples = Samples.from_parameters(ns, self.nDat, self.nCol)
         self.samples.alpha[0] = 1.
         self.samples.beta[0] = 1.
         self.samples.zeta[0] = gamma(
@@ -215,57 +222,30 @@ class Chain(StickBreakingSampler, Projection):
             1 - self.discount, 
             self.concentration + self.discount * np.arange(1, self.max_clust_count),
             )
-        self.samples.delta[0] = self.sample_delta(self.samples.chi[0])
-        self.samples.r[0] = self.sample_r(self.samples.delta[0], self.samples.zeta[0])
-        self.curr_iter = 0
-        # self.sigma_ph1 = np.ones((self.max_clust_count, self.nCol))
-        # self.sigma_ph2 = np.ones((self.nDat, self.nCol))
-        return
-    
-    def record_log_density(self):
-        lpl = 0.
-        lpp = 0.
-        Y = self.curr_r[:,None] * self.data.Yp
-        lpl += logd_prodgamma_paired(
-            Y,
-            self.curr_zeta[self.curr_delta],
-            self.sigma_ph2,
-            ).sum()
-        lpl += logd_prodgamma_my_st(self.curr_zeta, self.curr_alpha, self.curr_beta).sum()
-        lpp += logd_gamma(self.curr_alpha, *self.priors.alpha).sum()
-        lpp += logd_gamma(self.curr_beta, *self.priors.beta).sum()
-        self.samples.ld[self.curr_iter] = lpl + lpp
+        self.samples.delta[0] = self.sample_delta(self.curr_chi, self.curr_zeta)
+        self.samples.r[0] = self.sample_r(self.curr_delta, self.curr_zeta)
         return
 
-    def iter_sample(self):
-        raise NotImplementedError('Fix this!')
-        # current cluster assignments; number of new candidate clusters
-        delta = self.curr_delta.copy();  m = self.max_clust_count - (delta.max() + 1)
+    def iter_sample(self) -> None:
+        delta = self.curr_delta
         alpha = self.curr_alpha
         beta  = self.curr_beta
-        zeta  = np.vstack((self.curr_zeta, self.sample_zeta_new(alpha, beta, m)))
-        r     = self.curr_r
+        zeta  = self.curr_zeta
 
         self.curr_iter += 1
-        # Log-density for product of Gammas
-        log_likelihood = logd_prodgamma_my_mt(r[:,None] * self.data.Yp, zeta, self.sigma_ph1)
-        # pre-generate uniforms to inverse-cdf sample cluster indices
-        unifs = uniform(size = self.nDat)
-        # Sample new cluster membership indicators 
-        delta = pityor_cluster_sampler(
-            delta, log_likelihood, unifs, self.concentration, self.discount,
-            )
-        # clean indices (clear out dropped clusters, unused candidate clusters, and re-index)
-        delta, zeta = self.clean_delta_zeta(delta, zeta)
-        self.samples.delta[self.curr_iter] = delta
+
+        self.samples.chi[self.curr_iter]   = self.sample_chi(delta)
+        self.samples.delta[self.curr_iter] = self.sample_delta(self.curr_chi, zeta)
         self.samples.r[self.curr_iter]     = self.sample_r(self.curr_delta, zeta)
         self.samples.zeta[self.curr_iter]  = self.sample_zeta(
-                zeta, self.curr_r, self.curr_delta, alpha, beta,
-                )
-        self.samples.alpha[self.curr_iter] = self.sample_alpha(self.curr_zeta, alpha)
-        self.samples.beta[self.curr_iter]  = self.sample_beta(self.curr_zeta, self.curr_alpha)
-
-        self.record_log_density()
+            self.curr_delta, self.curr_r, zeta, alpha, beta,
+            )
+        self.samples.alpha[self.curr_iter] = self.sample_alpha(
+            self.curr_delta, self.curr_zeta, alpha,
+            )
+        self.samples.beta[self.curr_iter]  = self.sample_beta(
+            self.curr_delta, self.curr_zeta, self.curr_alpha,
+            )
         return
     
     def to_dict(self, nBurn = 0, nThin = 1) -> dict:
@@ -278,72 +258,26 @@ class Chain(StickBreakingSampler, Projection):
             }
         return out 
 
-    def write_to_disk(self, path, nBurn, nThin = 1):
-        if type(path) is str:
-            folder = os.path.split(path)[0]
-            if not os.path.exists(folder):
-                os.mkdir(folder)
-            if os.path.exists(path):
-                os.remove(path)
-        
-        zetas  = np.vstack([
-            np.hstack((np.ones((zeta.shape[0], 1)) * i, zeta))
-            for i, zeta in enumerate(self.samples.zeta[nBurn :: nThin])
-            ])
-        alphas = self.samples.alpha[nBurn :: nThin]
-        betas  = self.samples.beta[nBurn :: nThin]
-        deltas = self.samples.delta[nBurn :: nThin]
-        rs     = self.samples.r[nBurn :: nThin]
-
-        out = {
-            'zetas'  : zetas,
-            'alphas' : alphas,
-            'betas'  : betas,
-            'rs'     : rs,
-            'deltas' : deltas,
-            'nCol'   : self.nCol,
-            'nDat'   : self.nDat,
-            'V'      : self.data.V,
-            'logd'   : self.samples.ld,
-            'time'   : self.time_elapsed_numeric,
-            'conc'   : self.concentration,
-            'disc'   : self.discount,
-            }
-        
-        try:
-            out['Y'] = self.data.Y
-        except AttributeError:
-            pass
-        
-        if type(path) is BytesIO:
-            path.write(pickle.dumps(out))
-        else:
-            with open(path, 'wb') as file:
-                pickle.dump(out, file)
-
-        return
-
     def __init__(
             self,
-            data,
-            prior_alpha   = GammaPrior(0.5, 0.5),
-            prior_beta    = GammaPrior(2., 2.),
-            p             = 10,
-            concentration = 0.2,
-            discount      = 0.05,
-            max_clust_count = 200,
+            data        : Data,
+            prior_alpha : GammaPrior = GammaPrior(0.5, 0.5),
+            prior_beta  : GammaPrior = GammaPrior(2., 2.),
+            prior_chi   : GEMPrior   = GEMPrior(0.1, 0.1),
+            p           : int        = 10,
+            max_clust   : int        = 200,
             **kwargs
             ):
-        self.concentration = concentration
-        self.discount = discount
         self.data = data
-        self.max_clust_count = max_clust_count
+        self.max_clust_count = max_clust
         self.p = p
         self.nCol = self.data.nCol
         self.nDat = self.data.nDat
-        _prior_alpha = GammaPrior(*prior_alpha)
-        _prior_beta = GammaPrior(*prior_beta)
-        self.priors = Prior(_prior_alpha, _prior_beta)
+        self.priors = Prior(
+            GammaPrior(*prior_alpha), 
+            GammaPrior(*prior_beta), 
+            GEMPrior(*prior_chi),
+            )
         self.set_projection()
         return
 
@@ -367,6 +301,7 @@ class Result(object):
         return gamma(shape = zetas)
 
     def generate_posterior_predictive_zetas(self, n_per_sample = 1, m = 10, *args, **kwargs):
+        raise NotImplementedError('Fix this!')
         zetas = []
         for s in range(self.nSamp):
             dmax = self.samples.delta[s].max()
@@ -396,54 +331,15 @@ class Result(object):
         gammas = self.generate_posterior_predictive_gammas(n_per_sample, m, *args, **kwargs)
         return euclidean_to_hypercube(gammas)
 
-    def generate_posterior_predictive_angular(self, n_per_sample = 1, m = 10, *args, **kwargs):
-        hyp = self.generate_posterior_predictive_hypercube(n_per_sample, m, *args, **kwargs)
-        return euclidean_to_angular(hyp)
-
-    def write_posterior_predictive(self, path, n_per_sample = 1):
-        thetas = pd.DataFrame(
-                self.generate_posterior_predictive_angular(n_per_sample),
-                columns = ['theta_{}'.format(i) for i in range(1, self.nCol)],
-                )
-        thetas.to_csv(path, index = False)
-        return
-
-    def load_data(self, path):
-        if type(path) is BytesIO:
-            out = pickle.loads(path.getvalue())
-        else:
-            with open(path, 'rb') as file:
-                out = pickle.load(file)
-        
-        deltas = out['deltas']
-        zetas  = out['zetas']
-        alphas = out['alphas']
-        betas  = out['betas']
-        rs     = out['rs']
-        conc   = out['conc']
-        disc   = out['disc']
-
-        self.concentration = conc
-        self.discount      = disc
-        self.nSamp = deltas.shape[0]
-        self.nDat  = deltas.shape[1]
-        self.nCol  = alphas.shape[1]
-
-        self.data = Data_From_Sphere(out['V'])
-        try:
-            self.data.fill_outcome(out['Y'])
-        except KeyError:
-            pass
-
-        self.samples       = Samples(self.nSamp, self.nDat, self.nCol)
-        self.samples.delta = deltas
-        self.samples.alpha = alphas
-        self.samples.beta  = betas
-        self.samples.zeta  = [
-            zetas[np.where(zetas.T[0] == i)[0], 1:] for i in range(self.nSamp)
-            ]
-        self.samples.r     = rs
-        self.samples.ld    = out['logd']
+    def load_data(self, out : dict) -> None:        
+        self.samples = Samples.from_dict(out['samples'])
+        self.data    = Data.from_dict(out['data'])
+        self.priors  = out['prior']
+        self.concentration = out['conc']
+        self.discount      = out['disc']
+        self.nSamp = self.samples.delta.shape[0]
+        self.nDat  = self.samples.delta.shape[1]
+        self.nCol  = self.samples.alpha.shape[1]
         return
 
     def __init__(self, path):

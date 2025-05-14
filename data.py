@@ -488,13 +488,13 @@ class Categorical(Multinomial):
     pass 
 
 class Data(DataBase):
-    xh1t = None
-    xh2t = None
-    rank = None
-    sphr = None
-    cate = None
-
-    dcls = None
+    xh1t : Threshold_1Tail
+    xh2t : Threshold_2Tail
+    rank : RankTransform
+    sphr : Spherical
+    cate : Categorical
+    
+    dcls : bool
 
     Z : npt.NDArray[np.float64]
     W : npt.NDArray[np.float64]
@@ -503,10 +503,12 @@ class Data(DataBase):
     I : npt.NDArray[np.float64]
     Yp : npt.NDArray[np.float64]
     
-    cats = None
-    nCat = None
-    iCat = None
-    dCat = None
+    cats : list[int]
+    nCat : int
+    iCat : int
+    dCat : int
+    nCol : int
+    nDat : int
     
     def to_dict(self) -> dict:
         d = dict()

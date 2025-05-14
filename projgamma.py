@@ -1067,12 +1067,12 @@ def pt_logd_pareto_mx_ma(
 ## Functions related to sampling for parameters from posterior, assuming
 ## a projected gamma likelihood.
 
-def log_post_log_alpha_1(
+def log_fc_log_alpha_1(
         log_alpha_1 : npt.NDArray[np.float64], 
         y_1         : npt.NDArray[np.float64], 
         prior       : GammaPrior[float,float]
         ) -> npt.NDArray[np.float64]:
-    """ Log posterior for log-alpha_1 assuming a gamma distribution,
+    """ Log full-conditional for log-alpha_1 assuming a gamma distribution,
     with beta assumed to be 1. """
     alpha_1 = exp(log_alpha_1)
     n_1     = y_1.shape[0]
@@ -1099,33 +1099,84 @@ def sample_alpha_1_mh(
     curr_log_alpha_1 = log(curr_alpha_1)
     prop_log_alpha_1 = curr_log_alpha_1 + normal.rvs(scale = proposal_sd)
 
-    curr_lp = log_post_log_alpha_1(curr_log_alpha_1, y_1, prior)
-    prop_lp = log_post_log_alpha_1(prop_log_alpha_1, y_1, prior)
+    curr_lp = log_fc_log_alpha_1(curr_log_alpha_1, y_1, prior)
+    prop_lp = log_fc_log_alpha_1(prop_log_alpha_1, y_1, prior)
 
     if log(uniform.rvs()) < prop_lp - curr_lp:
         return exp(prop_log_alpha_1)
     else:
         return curr_alpha_1
 
-def log_post_log_alpha_k(
+def log_fc_log_alpha_k(
         log_alpha : npt.NDArray[np.float64], 
         y         : npt.NDArray[np.float64], 
         prior_a   : GammaPrior[float,float], 
         prior_b   : GammaPrior[float,float],
         ) -> npt.NDArray[np.float64]:
-    """ Log posterior for log-alpha assuming a gamma distribution,
+    """ Log full-conditional for log-alpha assuming a gamma distribution,
     beta integrated out of the posterior. """
     alpha = exp(log_alpha)
     n  = y.shape[0]
+    ys = y.sum(axis = 0)
+    lys = np.log(y).sum(axis = 0)
     lp = (
-        + (alpha - 1) * np.log(y).sum()
+        + (alpha - 1) * lys
         - n * loggamma(alpha)
         + prior_a.a * log_alpha
         - prior_a.b * alpha
         + loggamma(n * alpha + prior_b.a)
-        - (n * alpha + prior_b.a) * log(y.sum() + prior_b.b)
+        - (n * alpha + prior_b.a) * log(ys + prior_b.b)
         )
     return lp
+
+def log_fc_log_alpha_k_summary(
+        log_alpha : npt.NDArray[np.float64],
+        n         : npt.NDArray[np.int32],
+        ysum      : npt.NDArray[np.float64],
+        logysum   : npt.NDArray[np.float64],
+        prior_a   : GammaPrior[float,float] | GammaPrior[npt.NDArray, npt.NDArray],
+        prior_b   : GammaPrior[float,float] | GammaPrior[npt.NDArray, npt.NDArray],
+        ) -> npt.NDArray[np.float64]:
+    """
+    log of full-conditional for shape parameter in gamma distribution, with
+        gamma priors on shape and rate.  Assume summary statistics are 
+        already calculated.
+    """
+    # Verify shapes
+    assert log_alpha.shape == ysum.shape
+    assert logysum.shape == ysum.shape
+    # preamble
+    alpha = np.exp(log_alpha)
+    lfc = np.zeros(alpha.shape)
+    lfc += (alpha - 1) * logysum
+    lfc -= n * loggamma(alpha)
+    lfc += prior_a.a * log_alpha
+    lfc -= prior_a.b * alpha
+    lfc += loggamma(n * alpha + prior_b.a)
+    lfc -= (n * alpha + prior_b.a) * (ysum + prior_b.b)
+    return lfc
+
+def log_fc_log_alpha_1_summary(
+        log_alpha : npt.NDArray[np.float64],
+        n         : npt.NDArray[np.int32],
+        ysum      : npt.NDArray[np.float64],
+        logysum   : npt.NDArray[np.float64],
+        prior_a   : GammaPrior[float,float] | GammaPrior[npt.NDArray,npt.NDArray],
+        ) -> npt.NDArray[np.float64]:
+    """
+    log of full-conditional for shape parameter in gamma distribution, with gamma
+        prior, and rate := 1.   Assume summary statistics are already calculated.
+    """
+    # Verify shapes
+    assert log_alpha.shape == ysum.shape
+    # calculation
+    alpha = np.exp(log_alpha)
+    lfc = np.zeros(alpha.shape)
+    lfc += (alpha - 1) * logysum
+    lfc -= n * loggamma(alpha)
+    lfc += prior_a.a * log_alpha
+    lfc -= prior_a.b * alpha
+    return lfc
 
 def sample_alpha_k_mh(
         curr_alpha_k : npt.NDArray[np.float64], 
@@ -1142,8 +1193,8 @@ def sample_alpha_k_mh(
     curr_log_alpha_k = log(curr_alpha_k)
     prop_log_alpha_k = curr_log_alpha_k + normal.rvs(scale = proposal_sd)
 
-    curr_lp = log_post_log_alpha_k(curr_log_alpha_k, y_k, prior_a, prior_b)
-    prop_lp = log_post_log_alpha_k(prop_log_alpha_k, y_k, prior_a, prior_b)
+    curr_lp = log_fc_log_alpha_k(curr_log_alpha_k, y_k, prior_a, prior_b)
+    prop_lp = log_fc_log_alpha_k(prop_log_alpha_k, y_k, prior_a, prior_b)
 
     if log(uniform.rvs()) < prop_lp - curr_lp:
         return exp(prop_log_alpha_k)
