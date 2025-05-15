@@ -1,12 +1,10 @@
 import numpy as np
 import numpy.typing as npt
+from typing import Self
 from numpy.random import choice, gamma, uniform, normal, lognormal
 from collections import namedtuple, deque
-import pandas as pd
-import os
-import pickle
 from scipy.special import digamma
-from io import BytesIO
+
 # Custom Modules
 from samplers import py_sample_chi_bgsb, py_sample_cluster_bgsb,               \
     StickBreakingSampler, stickbreak
@@ -188,10 +186,10 @@ class Adam(object):
         return
 
 class VariationalParameters(object):
-    zeta_mutau   : npt.NDArray[np.float64]
-    zeta_adam    : Adam
-    alpha_mutau  : npt.NDArray[np.float64]
-    alpha_adam   : Adam
+    logzeta_mutau   : npt.NDArray[np.float64]
+    logzeta_adam    : Adam
+    logalpha_mutau  : npt.NDArray[np.float64]
+    logalpha_adam   : Adam
 
     def to_dict(self) -> dict:
         out = {
@@ -199,13 +197,30 @@ class VariationalParameters(object):
             'alpha_mutau' : self.alpha_mutau,
             }
         return out
+    
+    @classmethod
+    def from_meta(cls, S : int, J : int, **kwargs) -> Self:
+        logzeta_mutau = np.zeros((2, J, S))
+        logalpha_mutau = np.zeros((2, S))
+        logzeta_adam = Adam(logzeta_mutau, **kwargs)
+        logalpha_adam = Adam(logalpha_mutau, **kwargs)
+        return cls(logzeta_mutau, logalpha_mutau, logzeta_adam, logalpha_adam)
 
-    def __init__(self, S : int, J : int, **kwargs):
-        self.zeta_mutau = np.zeros((2, J, S)) # normal(size = (2, J, S))
-        self.alpha_mutau = np.zeros((2, S))   # normal(size = (2, S))
+    @classmethod
+    def from_dict(cls, out : dict) -> Self:
+        return cls(**out)
 
-        self.zeta_adam = Adam(self.zeta_mutau, **kwargs)
-        self.alpha_adam = Adam(self.alpha_mutau, **kwargs)
+    def __init__(
+            self, 
+            zeta_mutau  : npt.NDArray[np.float64], 
+            alpha_mutau : npt.NDArray[np.float64], 
+            zeta_adam : Adam = None, 
+            alpha_adam : Adam = None,
+            ):
+        self.zeta_mutau = zeta_mutau
+        self.alpha_mutau = alpha_mutau
+        self.zeta_adam = zeta_adam
+        self.alpha_adam = alpha_adam
         return
     pass
 
@@ -380,39 +395,7 @@ class Chain(StickBreakingSampler):
             'disc'    : self.discount,
             }
         return out
-
-    def write_to_disk(self, path) -> None:
-        if type(path) is str:
-            folder = os.path.split(path)[0]
-            if not os.path.exists(folder):
-                os.mkdir(folder)
-            if os.path.exists(path):
-                os.remove(path)
-        out = {
-            'zeta_mutau'  : self.varparm.zeta_mutau,
-            'alpha_mutau' : self.varparm.alpha_mutau,
-            'zetas'       : np.stack(self.samples.zeta),
-            'alphas'      : np.stack(self.samples.alpha),
-            'betas'       : np.stack(self.samples.beta),
-            'rs'          : np.stack(self.samples.r),
-            'deltas'      : np.stack(self.samples.delta),
-            'chis'        : np.stack(self.samples.chi),
-            'time'        : self.time_elapsed_numeric,
-            'conc'        : self.concentration,
-            'disc'        : self.discount,
-            'data'        : self.data.to_dict(),
-            }
-        try:
-            out['Y'] = self.data.Y
-        except AttributeError:
-            pass
-        if type(path) is BytesIO:
-            path.write(pickle.dumps(out))
-        else:
-            with open(path, 'wb') as file:
-                pickle.dump(out, file)
-        return
-    
+        
     def __init__(
             self, 
             data          : Data, 
@@ -514,7 +497,8 @@ class Result(object):
     
 if __name__ == '__main__':
     # raw = pd.read_csv('./datasets/ivt_updated_nov_mar.csv')
-    raw = pd.read_csv('./datasets/ivt_nov_mar.csv')
+    import pandas as pd
+    raw = pd.read_csv('./datasets/ivt_nov_mar.csv').values
     data = Data.from_raw(
         raw, 
         x1ht_cols = np.arange(raw.shape[1]), 

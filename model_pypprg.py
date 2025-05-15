@@ -5,7 +5,7 @@ from numpy.random import gamma, uniform, beta, normal
 from collections import namedtuple
 from typing import Self
 
-from samplers import GEMPrior, GammaPrior, StickBreakingSampler,              \
+from samplers import GEMPrior, GammaPrior, StickBreakingSampler, stickbreak,  \
     py_sample_chi_bgsb, py_sample_cluster_bgsb
 from projgamma import log_fc_log_alpha_1_summary, log_fc_log_alpha_k_summary, \
     pt_logd_projgamma_my_mt
@@ -36,7 +36,7 @@ class Samples(object):
         return cls(**out)
 
     @classmethod
-    def from_parameters(
+    def from_meta(
             cls, 
             nSamp  : int, 
             nDat   : int, 
@@ -211,7 +211,7 @@ class Chain(StickBreakingSampler, Projection):
 
     def initialize_sampler(self, ns) -> None:
         self.curr_iter = 0
-        self.samples = Samples.from_parameters(ns, self.nDat, self.nCol)
+        self.samples = Samples.from_meta(ns, self.nDat, self.nCol)
         self.samples.alpha[0] = 1.
         self.samples.beta[0] = 1.
         self.samples.zeta[0] = gamma(
@@ -300,27 +300,12 @@ class Result(object):
             ]),0,1) # (n,s,d)
         return gamma(shape = zetas)
 
-    def generate_posterior_predictive_zetas(self, n_per_sample = 1, m = 10, *args, **kwargs):
-        raise NotImplementedError('Fix this!')
+    def generate_posterior_predictive_zetas(self, n_per_sample = 1, *args, **kwargs):
         zetas = []
+        cumprob = stickbreak(self.samples.chi).cumsum(axis = -1)
         for s in range(self.nSamp):
-            dmax = self.samples.delta[s].max()
-            njs = np.bincount(self.samples.delta[s], minlength = int(dmax + 1 + m))
-            ljs = (
-                + njs - (njs > 0) * self.discount 
-                + (njs == 0) * (
-                    self.concentration 
-                    + (njs > 0).sum() * self.discount
-                    ) / m
-                )
-            new_zetas = gamma(
-                shape = self.samples.alpha[s],
-                scale = 1. / self.samples.beta[s],
-                size = (m, self.nCol),
-                )
-            prob = ljs / ljs.sum()
-            deltas = generate_indices(prob, n_per_sample)
-            zetas.append(np.vstack((self.samples.zeta[s], new_zetas))[deltas])
+            delta = np.searchsorted(cumprob[s], uniform(size = n_per_sample))
+            zetas.append(self.samples.zeta[s][delta])
         return np.vstack(zetas)
 
     def generate_posterior_predictive_gammas(self, n_per_sample = 1, m = 10, *args, **kwargs):
@@ -342,23 +327,23 @@ class Result(object):
         self.nCol  = self.samples.alpha.shape[1]
         return
 
-    def __init__(self, path):
-        self.load_data(path)
+    def __init__(self, out):
+        self.load_data(out)
         return
 
 if __name__ == '__main__':
     pass
 
-    from data import Data_From_Raw
-    from projgamma import GammaPrior
+    from data import Data
     from pandas import read_csv
-    import os
-
-    raw = read_csv('./datasets/ivt_nov_mar.csv')
-    data = Data_From_Raw(raw, decluster = True, quantile = 0.95)
+    raw = read_csv('./datasets/ivt_nov_mar.csv').values
+    data = Data.from_raw(
+        raw, xh1t_cols = np.arange(raw.shape[1]), dcls = True, xhquant = 0.95,
+        )
     model = Chain(data, p = 10)
     model.sample(10000, verbose = True)
-    model.write_to_disk('./test/results.pkl', 5000, 2)
-    res = Result('./test/results.pkl')
+    out = model.to_dict(5000, 1)
+    result = Result(out)
+
 
 # EOF
