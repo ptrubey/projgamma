@@ -2,7 +2,6 @@
 import numpy as np
 from numpy.random import normal, uniform, gamma
 from scipy.special import gammaln, digamma
-import matplotlib.pyplot as plt
 
 from samplers import BaseSampler
 

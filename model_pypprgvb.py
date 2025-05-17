@@ -7,54 +7,67 @@ from scipy.special import digamma
 
 # Custom Modules
 from samplers import py_sample_chi_bgsb, py_sample_cluster_bgsb,               \
-    StickBreakingSampler, stickbreak
-from data import euclidean_to_hypercube, Data
-from projgamma import GammaPrior, logd_projgamma_my_mt_inplace_unstable
+    StickBreakingSampler, stickbreak, GammaPrior, GEMPrior
+from data import euclidean_to_hypercube, Data, Projection
+from projgamma import  logd_projgamma_my_mt_inplace_unstable
 
 np.seterr(divide = 'raise', over = 'raise', under = 'ignore', invalid = 'raise')
 
-Prior = namedtuple('Prior','alpha beta')
+Prior = namedtuple('Prior','alpha beta chi')
 
 class Samples(object):
-    r     : deque[npt.NDArray[np.float64]] = None # radius (projected gamma)
-    chi   : deque[npt.NDArray[np.float64]] = None # stick-breaking weights (unnormalized)
-    delta : deque[npt.NDArray[np.int32]]   = None # cluster identifiers
-    beta  : deque[npt.NDArray[np.float64]] = None # rate hyperparameter
-    alpha : deque[npt.NDArray[np.float64]] = None # shape hyperparameter (inferred)
-    zeta  : deque[npt.NDArray[np.float64]] = None # shape parameter (inferred)
+    r     : deque[npt.NDArray[np.float64]] | npt.NDArray[np.float64] # radius (projected gamma)
+    chi   : deque[npt.NDArray[np.float64]] | npt.NDArray[np.float64] # stick-breaking weights (unnormalized)
+    delta : deque[npt.NDArray[np.int32]]   | npt.NDArray[np.int32]   # cluster identifiers
+    beta  : deque[npt.NDArray[np.float64]] | npt.NDArray[np.float64] # rate hyperparameter
+    alpha : deque[npt.NDArray[np.float64]] | npt.NDArray[np.float64] # shape hyperparameter (inferred)
+    zeta  : deque[npt.NDArray[np.float64]] | npt.NDArray[np.float64] # shape parameter (inferred)
     
     def to_dict(self) -> dict:
         out = {
-            'r' : np.stack(self.r),
-            'chi' : np.stack(self.chi),
+            'r'     : np.stack(self.r),
+            'chi'   : np.stack(self.chi),
             'delta' : np.stack(self.delta),
-            'beta' : np.stack(self.beta),
+            'zeta'  : np.stack(self.zeta),
+            'beta'  : np.stack(self.beta),
             'alpha' : np.stack(self.alpha),
-            'zeta' : np.stack(self.zeta),
             }
         return out
+    
+    @classmethod
+    def from_dict(cls, out) -> Self:
+        return cls(**out)
+
+    @classmethod
+    def from_meta(cls, nkeep : int, N : int, S : int, J : int):
+        r     = deque([], maxlen = nkeep)
+        chi   = deque([], maxlen = nkeep)
+        delta = deque([], maxlen = nkeep)
+        zeta  = deque([], maxlen = nkeep)
+        alpha = deque([], maxlen = nkeep)
+        beta  = deque([], maxlen = nkeep)
+        r.append(lognormal(mean = 3, sigma = 1, size = N))
+        chi.append(1 / np.arange(2, J + 1)[::-1]) # uniform probability
+        delta.append(choice(J, N))
+        beta.append(gamma(shape = 2, scale = 1 / 2, size = S))
+        return cls(r, chi, delta, zeta, alpha, beta)
 
     def __init__(
-            self, 
-            nkeep : int, 
-            N : int,  # nDat
-            S : int,  # nCol
-            J : int,  # nClust
+            self,
+            r     : deque[npt.NDArray[np.float64]] | npt.NDArray[np.float64],
+            chi   : deque[npt.NDArray[np.float64]] | npt.NDArray[np.float64],
+            delta : deque[npt.NDArray[np.int32]]   | npt.NDArray[np.int32],
+            zeta  : deque[npt.NDArray[np.float64]] | npt.NDArray[np.float64],
+            alpha : deque[npt.NDArray[np.float64]] | npt.NDArray[np.float64],
+            beta  : deque[npt.NDArray[np.float64]] | npt.NDArray[np.float64],
             ):
-        self.r     = deque([], maxlen = nkeep)
-        self.chi   = deque([], maxlen = nkeep)
-        self.delta = deque([], maxlen = nkeep)
-        self.beta  = deque([], maxlen = nkeep)
-        
-        self.r.append(lognormal(mean = 3, sigma = 1, size = N))
-        self.chi.append(1 / np.arange(2, J + 1)[::-1]) # uniform probability
-        self.delta.append(choice(J, N))
-        self.beta.append(gamma(shape = 2, scale = 1 / 2, size = S))
-        
-        self.alpha = deque([], maxlen = nkeep)
-        self.zeta  = deque([], maxlen = nkeep)
-        return
-    
+        self.r     = r
+        self.chi   = chi
+        self.delta = delta
+        self.zeta  = zeta
+        self.alpha = alpha
+        self.beta  = beta
+        return    
     pass
 
 def gradient_resgammagamma_ln(
@@ -173,28 +186,73 @@ class Adam(object):
             self.update()
         return
     
-    def __init__(
-            self, 
+    def to_dict(self) -> dict:
+        out = {
+            'rate' : self.rate,
+            'decay1' : self.decay1,
+            'decay2' : self.decay2,
+            'iter'   : self.iter,
+            'niter'  : self.niter,
+            'momentum' : self.momentum,
+            'sumofsqs' : self.sumofsqs,
+            'theta'    : self.theta,
+            }
+        return out
+    
+    @classmethod
+    def from_dict(cls, out : dict) -> Self:
+        return cls(**out)
+
+    @classmethod
+    def from_meta(
+            cls, 
             theta  : npt.NDArray[np.float64], 
-            rate   : float = 1e-3, 
+            rate   : float = 1e-3,
             decay1 : float = 0.9, 
             decay2 : float = 0.999, 
-            niter  : float = 10,
+            niter  : int = 10,
+            ) -> Self:
+        out = {
+            'rate'     : rate,
+            'decay1'   : decay1,
+            'decay2'   : decay2,
+            'iter'     : 0,
+            'niter'    : niter,
+            'momentum' : np.zeros(theta.shape),
+            'sumofsqs' : np.zeros(theta.shape),
+            'theta'    : theta,
+            }
+        return cls.from_dict(out)
+        
+    def __init__(
+            self, 
+            theta    : npt.NDArray[np.float64],
+            momentum : npt.NDArray[np.float64],
+            sumofsqs : npt.NDArray[np.float64],
+            rate     : float, 
+            decay1   : float, 
+            decay2   : float, 
+            iter     : int,
+            niter    : int,
             ):
-        self.theta = theta
-        self.initialization(rate, decay1, decay2, niter)
+        self.theta    = theta
+        self.momentum = momentum
+        self.sumofsqs = sumofsqs
+        self.rate     = rate
+        self.decay1   = decay1
+        self.decay2   = decay2
+        self.iter     = iter
+        self.niter    = niter
         return
 
 class VariationalParameters(object):
-    logzeta_mutau   : npt.NDArray[np.float64]
-    logzeta_adam    : Adam
-    logalpha_mutau  : npt.NDArray[np.float64]
-    logalpha_adam   : Adam
+    logzeta : Adam
+    logalpha : Adam
 
     def to_dict(self) -> dict:
         out = {
-            'zeta_mutau'  : self.zeta_mutau,
-            'alpha_mutau' : self.alpha_mutau,
+            'logzeta'   : self.logzeta.to_dict(),
+            'logaalpha' : self.logalpha.to_dict(),
             }
         return out
     
@@ -202,32 +260,30 @@ class VariationalParameters(object):
     def from_meta(cls, S : int, J : int, **kwargs) -> Self:
         logzeta_mutau = np.zeros((2, J, S))
         logalpha_mutau = np.zeros((2, S))
-        logzeta_adam = Adam(logzeta_mutau, **kwargs)
-        logalpha_adam = Adam(logalpha_mutau, **kwargs)
-        return cls(logzeta_mutau, logalpha_mutau, logzeta_adam, logalpha_adam)
+        logzeta = Adam(logzeta_mutau, **kwargs)
+        logalpha = Adam(logalpha_mutau, **kwargs)
+        return cls(logzeta = logzeta, logalpha = logalpha)
 
     @classmethod
     def from_dict(cls, out : dict) -> Self:
-        return cls(**out)
+        logzeta = Adam.from_dict(out['logzeta'])
+        logalpha = Adam.from_dict(out['logalpha'])
+        return cls(logzeta = logzeta, logalpha = logalpha)
 
     def __init__(
-            self, 
-            zeta_mutau  : npt.NDArray[np.float64], 
-            alpha_mutau : npt.NDArray[np.float64], 
-            zeta_adam : Adam = None, 
-            alpha_adam : Adam = None,
+            self,
+            logzeta : Adam,
+            logalpha : Adam,
             ):
-        self.zeta_mutau = zeta_mutau
-        self.alpha_mutau = alpha_mutau
-        self.zeta_adam = zeta_adam
-        self.alpha_adam = alpha_adam
+        self.logzeta = logzeta,
+        self.logalpha = logalpha,
         return
     pass
 
-class Chain(StickBreakingSampler):
+class Chain(StickBreakingSampler, Projection):
     samples       : Samples
     varparm       : VariationalParameters
-    priors        : Prior
+    priors        : Prior[GammaPrior,GammaPrior,GEMPrior]
     concentration : float
     discount      : float
     N             : int
@@ -247,8 +303,8 @@ class Chain(StickBreakingSampler):
     @property
     def curr_alpha(self) -> npt.NDArray[np.float64]:
         return lognormal(
-            mean = self.varparm.alpha_mutau[0], 
-            sigma = np.exp(self.varparm.alpha_mutau[1])
+            mean = self.varparm.logalpha.theta[0], 
+            sigma = np.exp(self.varparm.logalpha.theta[1])
             )
     @property
     def curr_beta(self) -> npt.NDArray[np.float64]:
@@ -256,8 +312,8 @@ class Chain(StickBreakingSampler):
     @property
     def curr_zeta(self) -> npt.NDArray[np.float64]:
         return lognormal(
-            mean = self.varparm.zeta_mutau[0], 
-            sigma = np.exp(self.varparm.zeta_mutau[1]),
+            mean = self.varparm.logzeta.theta[0], 
+            sigma = np.exp(self.varparm.logzeta.theta[1]),
             )
     
     def update_zeta(
@@ -271,14 +327,13 @@ class Chain(StickBreakingSampler):
         Y = r[:,None] * self.data.Yp
         n = dmat.sum(axis = 0)
         lYs = dmat.T @ np.log(Y) # (np.log(Y).T @ dmat).T
-        self.varparm.zeta_adam.update
         
         func = lambda: - gradient_resgammagamma_ln(
-            self.varparm.zeta_mutau, lYs, n, alpha, beta, self.var_samp,
+            self.varparm.logzeta.theta, lYs, n, alpha, beta, self.var_samp,
             )
 
-        self.varparm.zeta_adam.specify_dloss(func)
-        self.varparm.zeta_adam.optimize()
+        self.varparm.logzeta.specify_dloss(func)
+        self.varparm.logzeta.optimize()
         
         self.samples.zeta.append(self.curr_zeta)
         return
@@ -294,15 +349,15 @@ class Chain(StickBreakingSampler):
         Zs  = zeta[active].sum(axis = 0)
 
         func = lambda: - gradient_gammagamma_ln(
-            self.varparm.alpha_mutau, 
+            self.varparm.logalpha.theta, 
             lZs, Zs, n,
             *self.priors.alpha,
             *self.priors.beta,
             ns = self.var_samp
             )
                 
-        self.varparm.alpha_adam.specify_dloss(func)
-        self.varparm.alpha_adam.optimize()
+        self.varparm.logalpha.specify_dloss(func)
+        self.varparm.logalpha.optimize()
 
         self.samples.alpha.append(self.curr_alpha)
         return
@@ -377,22 +432,14 @@ class Chain(StickBreakingSampler):
             )
         self.curr_iter = 0
         pass
-
-    def set_projection(self) -> None:
-        self.data.Yp = (
-            self.data.V.T / 
-            (self.data.V ** self.p).sum(axis = 1)**(1/self.p)
-            ).T
-        return
     
     def to_dict(self) -> dict:
         out = {
             'varparm' : self.varparm.to_dict(),
             'samples' : self.samples.to_dict(),
             'data'    : self.data.to_dict(),
+            'prior'   : self.priors,
             'time'    : self.time_elapsed_numeric,
-            'conc'    : self.concentration,
-            'disc'    : self.discount,
             }
         return out
         
@@ -406,8 +453,7 @@ class Chain(StickBreakingSampler):
             p             : float = 10.,
             prior_alpha   : GammaPrior[float, float] = GammaPrior(1.01, 1.01),
             prior_beta    : GammaPrior[float, float] = GammaPrior(2., 1.),
-            concentration : float = 0.1, 
-            discount      : float = 0.1,
+            prior_chi     : GEMPrior[float, float]   = GEMPrior(0.1,0.1),
             ):
         self.data = data
         assert len(self.data.cats) == 0
@@ -415,34 +461,19 @@ class Chain(StickBreakingSampler):
         self.S = self.data.nCol
         self.J = max_clusters
         self.p = p
-        self.concentration = concentration
-        self.discount = discount
         self.var_samp = var_samp
         self.var_iter = var_iter
         self.gibbs_samp = gibbs_samples
-        self.priors = Prior(GammaPrior(*prior_alpha), GammaPrior(*prior_beta))
+        self.priors = Prior(
+            GammaPrior(*prior_alpha), 
+            GammaPrior(*prior_beta), 
+            GEMPrior(*prior_chi)
+            )
         self.set_projection()
         return
 
-class ResultSamples(Samples):
-    r     : npt.NDArray[np.float64]
-    chi   : npt.NDArray[np.float64]
-    delta : npt.NDArray[np.int32]
-    beta  : npt.NDArray[np.float64]
-    alpha : npt.NDArray[np.float64]
-    zeta  : npt.NDArray[np.float64]
-
-    def __init__(self, dict):
-        self.r     = dict['rs']
-        self.chi   = dict['chis']
-        self.delta = dict['deltas']
-        self.beta  = dict['betas']
-        self.alpha = dict['alphas']
-        self.zeta  = dict['zetas']
-        return
-
 class Result(object):
-    samples              : ResultSamples
+    samples              : Samples
     discount             : float
     concentration        : float
     time_elapsed_numeric : float
@@ -483,11 +514,10 @@ class Result(object):
         return euclidean_to_hypercube(gammas)
 
     def load_data(self, out):
-        self.data     = Data.from_dict(out['data'])
-        self.samples  = ResultSamples(out['samples'])
-        self.varparm  = VariationalParameters(out['varparm'])
-        self.discount = out['disc']
-        self.concentration = out['conc']
+        self.data    = Data.from_dict(out['data'])
+        self.samples = Samples.from_dict(out['samples'])
+        self.varparm = VariationalParameters.from_dict(out['varparm'])
+        self.priors  = out['prior']
         self.time_elapsed_numeric = out['time']
         return
 
