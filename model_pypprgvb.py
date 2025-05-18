@@ -513,7 +513,7 @@ class Result(object):
         gammas = self.generate_posterior_predictive_gammas(n_per_sample)
         return euclidean_to_hypercube(gammas)
 
-    def load_data(self, out):
+    def load_data(self, out : dict) -> None:
         self.data    = Data.from_dict(out['data'])
         self.samples = Samples.from_dict(out['samples'])
         self.varparm = VariationalParameters.from_dict(out['varparm'])
@@ -521,8 +521,8 @@ class Result(object):
         self.time_elapsed_numeric = out['time']
         return
 
-    def __init__(self, path):
-        self.load_data(path)
+    def __init__(self, out : dict):
+        self.load_data(out)
         return
     
 if __name__ == '__main__':

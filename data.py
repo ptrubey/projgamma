@@ -32,6 +32,7 @@ def euclidean_to_simplex(euc : npt.NDArray[np.float64]) -> npt.NDArray[np.float6
     return (euc + EPS) / (euc + EPS).sum(axis = -1)[...,None]
 
         # self.pool = get_context('spawn').Pool(
+
 def euclidean_to_hypercube(euc : npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     """ Project R_+^d to S_{infty}^{d-1}"""
     V = (euc + EPS) / (euc + EPS).max(axis = -1)[...,None]
@@ -93,24 +94,24 @@ def compute_uni_gp_parms(
     a, xi = gpd_fit(rv, b)
     return np.array((b,a,xi))
 
-def compute_gp_parameters_2tail(raw : np.ndarray, q : float):
+def compute_gp_parameters_2tail(raw : npt.NDArray[np.float64], q : float):
     """ Computes GP parameters for both tails. """
     P = np.zeros((2,3,raw.shape[1]))
     P[0] = np.apply_along_axis(lambda x: compute_uni_gp_parms(x, q), 0, raw)
     P[1] = np.apply_along_axis(lambda x: compute_uni_gp_parms(x, q), 0, -raw)
     return P
 
-def compute_gp_parameters_1tail(raw : np.ndarray, q : float):
+def compute_gp_parameters_1tail(raw : npt.NDArray[np.float64], q : float):
     """ Computes GP parameters only for the upper tail """
     P = np.zeros((1,3,raw.shape[1]))
     P[0] = np.apply_along_axis(lambda x: compute_uni_gp_parms(x, q), 0, raw)
     return P
 
 def rescale_pareto(
-        Z : np.ndarray,
-        P : np.ndarray,
-        C : np.ndarray = None,
-        ) -> np.ndarray:
+        Z : npt.NDArray[np.float64],
+        P : npt.NDArray[np.float64],
+        C : npt.NDArray[np.int32] = None,
+        ) -> npt.NDArray[np.float64]:
     if C is None:
         C = np.zeros(Z.shape, int)
     # Bounds Checking
@@ -130,9 +131,9 @@ def rescale_pareto(
     return out
 
 def standardize_pareto_2tail(
-        raw : np.ndarray, 
-        P : np.ndarray,
-        ) -> tuple:
+        raw : npt.NDArray[np.float64], 
+        P : npt.NDArray[np.float64],
+        ) -> tuple[npt.NDArray[np.float64],npt.NDArray[np.int32]]:
     """ Do the Pareto Scaling for both tails """
     # Bounds Checking
     assert raw.shape[1] == P.shape[2]
@@ -157,9 +158,9 @@ def standardize_pareto_2tail(
     return Z, C
 
 def standardize_pareto_1tail(
-        raw : np.ndarray,
-        P   : np.ndarray,
-        ) -> np.ndarray:
+        raw : npt.NDArray[np.float64],
+        P   : npt.NDArray[np.float64],
+        ) -> npt.NDArray[np.float64]:
     """ Do the Pareto scaling for 1 tail """
     assert raw.shape[1] == P.shape[2]
     assert P.shape[0] == 1
@@ -178,9 +179,9 @@ def standardize_pareto_1tail(
     return scratch
 
 def rank_transform_pareto(
-        raw   : np.ndarray, 
+        raw   : npt.NDArray[np.float64], 
         Fhats : list,
-        ) -> np.ndarray:
+        ) -> npt.NDArray[np.float64]:
     """ Do Rank-Transform Standard Pareto Scaling """
     # Bounds Checking
     assert len(raw.shape) == 2
@@ -193,17 +194,17 @@ def rank_transform_pareto(
     return Z
 
 def rank_invtransform_pareto(
-        Z : np.ndarray,
+        Z : npt.NDArray[np.float64],
         Fhats : list,
-        ) -> np.ndarray:
+        ) -> npt.NDArray[np.float64]:
     # Bounds Checking
     assert len(Z.shape) == 2
     assert Z.shape[1] == len(Fhats)
     # Transformation
-    X = np.ndarray(
+    X = np.array([
         Fhat.FhatInv(z)
         for Fhat, z in zip(Fhats, Z.T)
-        )
+        ])
     return X
 
 class DataBase(object):
@@ -214,7 +215,9 @@ class DataBase(object):
     dCat = None
 
     @staticmethod
-    def form_idCat(cats : np.ndarray) -> tuple:
+    def form_idCat(
+            cats : npt.NDArray[np. int32],
+            ) -> tuple[npt.NDArray[np.int32],npt.NDArray[np.bool_]]:
         if len(cats) == 0:
             iCat = np.array([], dtype = int)
             dCat = np.array([], dtype = bool)
@@ -228,14 +231,14 @@ class DataBase(object):
         return iCat, dCat
     
     @classmethod
-    def from_dict(cls, d : dict):
+    def from_dict(cls, d : dict) -> Self:
         return cls(**d)
 
     def to_dict(self) -> dict:
         raise NotImplementedError('Overwrite Me!')
     
     @classmethod
-    def from_raw(cls, **kwargs):
+    def from_raw(cls, **kwargs) -> Self:
         raise NotImplementedError('Overwrite Me!')
 
 class Threshold_2Tail(DataBase):
@@ -250,7 +253,7 @@ class Threshold_2Tail(DataBase):
         return rescale_pareto(Z, self.P, self.C)
 
     @classmethod
-    def from_raw(cls, raw : np.ndarray, q : float):
+    def from_raw(cls, raw : npt.NDArray[np.float64], q : float):
         assert len(raw.shape) == 2
         assert type(q) is float
         P = compute_gp_parameters_2tail(raw, q)
@@ -272,11 +275,11 @@ class Threshold_2Tail(DataBase):
         return d
 
     def __init__(self,
-            raw : np.ndarray, 
-            P   : np.ndarray, 
-            Z   : np.ndarray, 
-            C   : np.ndarray, 
-            W   : np.ndarray, 
+            raw : npt.NDArray[np.float64], 
+            P   : npt.NDArray[np.float64], 
+            Z   : npt.NDArray[np.float64], 
+            C   : npt.NDArray[np.int32], 
+            W   : npt.NDArray[np.float64], 
             q   : float,
             ):
         self.raw = raw
@@ -292,16 +295,16 @@ class Threshold_2Tail(DataBase):
 
 class Threshold_1Tail(Threshold_2Tail):
     @classmethod
-    def from_raw(cls, raw : np.ndarray, q : float):
+    def from_raw(cls, raw : npt.NDArray[np.float64], q : float):
         P = compute_gp_parameters_1tail(raw, q)
         Z = standardize_pareto_1tail(raw, P)
         return cls(raw, P, Z, q)
     
     def __init__(
             self, 
-            raw : np.ndarray, 
-            P   : np.ndarray, 
-            Z   : np.ndarray, 
+            raw : npt.NDArray[np.float64], 
+            P   : npt.NDArray[np.float64], 
+            Z   : npt.NDArray[np.float64], 
             q   : float, 
             **kwargs
             ):
@@ -325,12 +328,12 @@ class RankTransform(DataBase):
     Fhats = []
 
     @classmethod
-    def from_raw(cls, raw : np.ndarray):
+    def from_raw(cls, raw : npt.NDArray[np.float64]):
         Fhats = list(map(ECDF, raw.T))
-        Z     = rank_transform_pareto(X)
+        Z     = rank_transform_pareto(raw, Fhats)
         return cls(raw, Z, Fhats)
 
-    def std_pareto_transform(self, X : np.ndarray) -> np.ndarray:
+    def std_pareto_transform(self, X : npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
         return rank_transform_pareto(X, self.Fhats)
     
     def to_dict(self) -> dict:
@@ -341,7 +344,7 @@ class RankTransform(DataBase):
             }
         return d
 
-    def __init__(self, raw : np.ndarray, Z : np.ndarray, Fhats : list):
+    def __init__(self, raw : npt.NDArray[np.float64], Z : npt.NDArray[np.float64], Fhats : list):
         self.raw = raw
         self.Z = Z
         self.Fhats = Fhats
@@ -351,7 +354,7 @@ class Spherical(DataBase):
     V = None
     
     @classmethod
-    def from_raw(cls, raw : np.ndarray):
+    def from_raw(cls, raw : npt.NDArray[np.float64]):
         # Bounds-checking
         assert raw.shape[0] > 0
         assert raw.shape[1] > 0
@@ -383,8 +386,8 @@ class Multinomial(DataBase):
     @classmethod
     def from_raw(
             cls, 
-            raw  : np.ndarray, 
-            cats : np.ndarray,
+            raw  : npt.NDArray[np.float64], 
+            cats : npt.NDArray[np.int32],
             ):
         nCat = cats.sum()
         try:
@@ -409,12 +412,12 @@ class Multinomial(DataBase):
 
     def __init__(
             self, 
-            cats : np.ndarray, 
+            cats : npt.NDArray[np.int32], 
             nCat : int, 
-            iCat : np.ndarray,
-            dCat : np.ndarray,
-            raw  : np.ndarray, 
-            W    : np.ndarray,
+            iCat : npt.NDArray[np.int32],
+            dCat : npt.NDArray[np.bool_],
+            raw  : npt.NDArray[np.int32], 
+            W    : npt.NDArray[np.int32],
             ):
         self.cats = cats
         self.nCat = nCat
@@ -759,27 +762,6 @@ class Projection(object):
     pass
 
 if __name__ == '__main__':
-    X1 = np.random.normal(loc = 1., size = (500, 5)) # 5
-    X2 = np.random.gamma(shape =  5, scale = 0.5, size = (500, 3)) # 3
-    X3 = np.vstack((
-        np.random.choice(3, size = 500, p = np.array([1,2,3])/6),
-        np.random.choice(3, size = 500, p = np.array([3,2,1])/6),
-        np.random.choice(3, size = 500, p = np.array([1,4,1])/6),
-        )).T # 3
-    X = np.hstack((X1,X2,X3))
-    data = Data.from_raw(
-        raw = X, 
-        xhquant = 0.95,
-        dcls = False,
-        xh2t_cols = np.array([0,1,2,3,4], dtype = int),
-        xh1t_cols = np.array([5,6,7], dtype = int),
-        cate_cols = np.array([8,9,10], dtype = int),
-        ) # instantiate
-    d = data.to_dict() # serialize
-    dat2 = Data.from_dict(d) # recover from serialized
-    assert all(dat2.cats == data.cats)
-    assert np.all(dat2.W == data.W)
-    assert np.all(dat2.dCat == data.dCat)
-    raise
+    pass
 
 # EOF
