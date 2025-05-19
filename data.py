@@ -386,7 +386,7 @@ class Multinomial(DataBase):
     @classmethod
     def from_raw(
             cls, 
-            raw  : npt.NDArray[np.float64], 
+            raw  : npt.NDArray[np.int32], 
             cats : npt.NDArray[np.int32],
             ):
         nCat = cats.sum()
@@ -476,12 +476,12 @@ class Categorical(Multinomial):
 
     def __init__(
             self,
-            cats : np.ndarray,
+            cats : npt.NDArray[np.int32],
             nCat : int,
-            iCat : np.ndarray,
-            dCat : np.ndarray,
-            raw  : np.ndarray, 
-            W    : np.ndarray,
+            iCat : npt.NDArray[np.int32],
+            dCat : npt.NDArray[np.int32],
+            raw  : npt.NDArray[np.int32], 
+            W    : npt.NDArray[np.int32],
             vals : list,
             ):
         self.vals = vals
@@ -626,14 +626,14 @@ class Data(DataBase):
     @classmethod
     def from_raw(
             cls, 
-            raw         : np.ndarray, 
-            xh1t_cols   : np.ndarray = np.array([], dtype = int),
-            xh2t_cols   : np.ndarray = np.array([], dtype = int), 
+            raw         : npt.NDArray[np.float64], 
+            xh1t_cols   : npt.NDArray[np.int32] = np.array([], dtype = int),
+            xh2t_cols   : npt.NDArray[np.int32] = np.array([], dtype = int), 
             xhquant     : float      = None,
             dcls        : bool       = None,
-            rank_cols   : np.ndarray = np.array([], dtype = int), 
-            sphr_cols   : np.ndarray = np.array([], dtype = int), 
-            cate_cols   : np.ndarray = np.array([], dtype = int), 
+            rank_cols   : npt.NDArray[np.int32] = np.array([], dtype = int), 
+            sphr_cols   : npt.NDArray[np.int32] = np.array([], dtype = int), 
+            cate_cols   : npt.NDArray[np.int32] = np.array([], dtype = int), 
             cate_val    : list       = None,
             ) -> Self:
         """ data generation from raw, single table.  columns identified using C indexing. """
@@ -671,14 +671,14 @@ class Data(DataBase):
     @classmethod
     def from_raw_separated(
             cls, 
-            xh1t_raw : np.ndarray = None, 
-            xh2t_raw : np.ndarray = None, 
-            xhquant  : float      = None,
-            dcls     : bool       = False,
-            rank_raw : np.ndarray = None,
-            sphr_raw : np.ndarray = None,
-            cate_raw : np.ndarray = None,
-            cate_val : list       = None,
+            xh1t_raw : npt.NDArray[np.float64] = None, 
+            xh2t_raw : npt.NDArray[np.float64] = None, 
+            xhquant  : float                   = None,
+            dcls     : bool                    = False,
+            rank_raw : npt.NDArray[np.float64] = None,
+            sphr_raw : npt.NDArray[np.float64] = None,
+            cate_raw : npt.NDArray[np.int32]   = None,
+            cate_val : list                    = None,
             ):
         # Regime Checking
         if (xh1t_raw is not None) or (xh2t_raw is not None):
@@ -719,16 +719,16 @@ class Data(DataBase):
             rank : RankTransform,
             sphr : Spherical,
             cate : Categorical, 
-            Z    : np.ndarray = None, 
-            W    : np.ndarray = None, 
-            V    : np.ndarray = None, 
-            R    : np.ndarray = None, 
-            I    : np.ndarray = None,
-            cats : np.ndarray = None,
-            nCat : int        = None,
-            iCat : np.ndarray = None,
-            dCat : np.ndarray = None,
-            dcls : bool       = None,
+            Z    : npt.NDArray[np.float64] = None, 
+            W    : npt.NDArray[np.float64] = None, 
+            V    : npt.NDArray[np.float64] = None, 
+            R    : npt.NDArray[np.float64] = None, 
+            I    : npt.NDArray[np.int32]   = None,
+            cats : npt.NDArray[np.int32]   = None,
+            nCat : int                     = None,
+            iCat : npt.NDArray[np.int32]   = None,
+            dCat : npt.NDArray[np.bool_]   = None,
+            dcls : bool                    = None,
             ):
         self.xh1t = xh1t
         self.xh2t = xh2t
