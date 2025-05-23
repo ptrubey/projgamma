@@ -3,7 +3,7 @@ import numpy as np
 from numpy.random import normal, uniform, gamma
 from scipy.special import gammaln, digamma
 
-from samplers import BaseSampler
+from .samplers import BaseSampler
 
 class Samples(object):
     def __init__(self, ns):

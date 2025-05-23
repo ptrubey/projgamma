@@ -9,17 +9,17 @@ from collections import namedtuple
 EPS = np.finfo(float).eps
 
 import cUtility as cu
-from samplers import ParallelTemperingStickBreakingSampler,                     \
+from .samplers import ParallelTemperingStickBreakingSampler,                     \
     bincount2D_vectorized, pt_py_sample_chi_bgsb, pt_py_sample_cluster_bgsb,    \
     NormalPrior, InvWishartPrior, GEMPrior
-from data import Projection, Data, category_matrix, euclidean_to_catprob,       \
+from .data import Projection, Data, category_matrix, euclidean_to_catprob,       \
     euclidean_to_hypercube, euclidean_to_psphere, euclidean_to_simplex
-from projgamma import pt_logd_cumdircategorical_mx_ma_inplace_unstable,         \
+from .projgamma import pt_logd_cumdircategorical_mx_ma_inplace_unstable,         \
     pt_logd_mvnormal_mx_st, logd_mvnormal_mx_st, logd_invwishart_ms,            \
     pt_logd_cumdirmultinom_paired_yt, pt_logd_projgamma_my_mt_inplace_unstable, \
     pt_logd_projgamma_paired_yt, pt_logd_pareto_mx_ma_inplace_unstable,         \
     pt_logd_pareto_paired_yt
-from cov import PerObsTemperedOnlineCovariance
+from .cov import PerObsTemperedOnlineCovariance
 
 Prior = namedtuple('Prior', 'mu Sigma chi')
 
