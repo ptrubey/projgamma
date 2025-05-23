@@ -126,14 +126,14 @@ class Anomaly(Projection):
             sigmas = np.ones(zetas.shape)
         return zetas, sigmas
     @property
-    def r(self):
+    def r(self) -> npt.NDArray[np.float64]:
         zetas, sigmas = self.zeta_sigma
         self.set_projection()
         r_shape = zetas[:,:,:self.nCol].sum(axis = 2)
         r_rate  = (sigmas[:,:,:self.nCol] * self.data.Yp[None,:,:]).sum(axis = 2)
         return gamma(r_shape, scale = 1 / r_rate)
     @property
-    def rho(self):
+    def rho(self) -> npt.NDArray[np.float64]:
         zetas, sigmas = self.zeta_sigma
         try:
             rho_shapes = zetas[:,:,self.nCol:] + self.data.W[None,:,:]
@@ -142,7 +142,7 @@ class Anomaly(Projection):
         except AttributeError:
             return np.zeros((self.nSamp, self.nDat, 0))
     
-    def energy_score(self):
+    def energy_score(self) -> npt.NDArray[np.float64]:
         if chkarr(self.data, 'V') and chkarr(self.data, 'W'):
             Vnew = euclidean_to_hypercube(
                 self.generate_posterior_predictive_gammas(self.postpred_per_samp)[:,:self.nCol]
@@ -161,7 +161,7 @@ class Anomaly(Projection):
             raise            
 
     ## Latent Distance per Observation (Summary)
-    def euclidean_distance(self, V = None, W = None, R = None, **kwargs):
+    def euclidean_distance(self, V = None, W = None, R = None, **kwargs) -> npt.NDArray[np.float64]:
         # znew axis: (observation, sample iteration, dimension): (i, s, d)
         znew  = self.generate_new_conditional_posterior_predictive_zetas(Vnew = V, Wnew = W, Rnew = R)
         if hasattr(self.data, 'V') and (V is not None):            
