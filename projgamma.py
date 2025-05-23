@@ -15,7 +15,6 @@ from scipy.stats import gamma
 from scipy.stats import norm as normal
 from scipy.stats import uniform
 
-from genpareto import gpd_fit
 from samplers import log_stickbreak, GammaPrior
 
 ## Functions related to projected gamma density
@@ -221,10 +220,6 @@ def logd_projresgamma_my_mt(
         ld -= loggamma(aAlpha).sum(axis = -1)
         ld += np.einsum('nd,jd->nj', np.log(aY), aAlpha - 1)
         ld += aSum
-
-
-
-
 
 def pt_logd_projgamma_my_mt_inplace_unstable(
         out    : npt.NDArray[np.float64], 
