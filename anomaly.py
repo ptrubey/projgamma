@@ -54,7 +54,7 @@ def chkarr(obj, attr):
 
 def metric_auc(
         scores : npt.NDArray[np.float64], 
-        actual : npt.NDArray[np.bool],
+        actual : npt.NDArray[np.bool_],
         ) -> tuple[float, float]:
     """  
     metric_auc(scores, actual)
