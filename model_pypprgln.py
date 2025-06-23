@@ -8,13 +8,12 @@ from collections import namedtuple
 # np.seterr(invalid='raise')
 EPS = np.finfo(float).eps
 
-import cUtility as cu
 from .samplers import ParallelTemperingStickBreakingSampler,                     \
     bincount2D_vectorized, pt_py_sample_chi_bgsb, pt_py_sample_cluster_bgsb,    \
     NormalPrior, InvWishartPrior, GEMPrior
 from .data import Projection, Data, category_matrix, euclidean_to_catprob,       \
     euclidean_to_hypercube, euclidean_to_psphere, euclidean_to_simplex
-from .projgamma import pt_logd_cumdircategorical_mx_ma_inplace_unstable,         \
+from .densities import pt_logd_cumdircategorical_mx_ma_inplace_unstable,         \
     pt_logd_mvnormal_mx_st, logd_mvnormal_mx_st, logd_invwishart_ms,            \
     pt_logd_cumdirmultinom_paired_yt, pt_logd_projgamma_my_mt_inplace_unstable, \
     pt_logd_projgamma_paired_yt, pt_logd_pareto_mx_ma_inplace_unstable,         \
@@ -538,12 +537,14 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
         return
 
 class Result(object):
+    priors : Prior[NormalPrior, InvWishartPrior, GEMPrior]
+
     def generate_posterior_predictive_gammas(
             self, 
             n_per_sample : int = 1, 
             m : int = 10,
             ) -> npt.NDArray[np.float64]:
-        new_gammas = []
+        zetas = [] 
         njs = np.zeros(self.max_clust_count, dtype = int)
         ljs = np.zeros(self.max_clust_count)
         prob = np.zeros(self.max_clust_count)
@@ -551,14 +552,16 @@ class Result(object):
             njs[:] = np.bincount(self.samples.delta[s], minlength = self.max_clust_count)
             ljs[:] = 0.
             ljs += njs
-            ljs -= (njs > 0) * self.GEMPrior.discount
-            ljs += (njs == 0) * self.GEMPrior.concentration / m
-            ljs += (njs == 0) * self.GEMPrior.discount * (njs > 0).sum() / m
+            ljs -= (njs > 0) * self.priors.chi.discount
+            ljs += (njs == 0) * self.priors.chi.concentration / m
+            ljs += (njs == 0) * self.priors.chi.discount * (njs > 0).sum() / m
             prob[:] = ljs / ljs.sum()
-            deltas = cu.generate_indices(prob, n_per_sample)
-            zeta = self.samples.zeta[s][deltas]
-            new_gammas.append(gamma(shape = zeta))
-        return np.vstack(new_gammas)
+            Sprob = np.cumsum(prob, axis = -1)
+            unis  = uniform(size = n_per_sample)
+            delta = np.searchsorted(Sprob, unis)
+            zetas.append(self.samples.zeta[s][delta])
+        zetas = np.vstack(zetas)
+        return gamma(shape = zetas)
 
     def generate_posterior_predictive_hypercube(
             self, 
@@ -750,7 +753,7 @@ class Result(object):
 
 if __name__ == '__main__':
     from data import Data
-    from projgamma import GammaPrior
+    from densities import GammaPrior
     from pandas import read_csv
     import os
 

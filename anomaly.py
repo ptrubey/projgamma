@@ -30,7 +30,7 @@ from .energy import limit_cpu, kde_per_obs, manhattan_distance_matrix,          
     euclidean_dmat_per_obs, hypercube_dmat_per_obs, manhattan_dmat_per_obs,     \
     mixed_energy_score, real_energy_score, simp_energy_score,                   \
     multi_kde_per_obs
-from .projgamma import pt_logd_cumdircategorical_mx_ma, pt_logd_dirichlet_mx_ma, \
+from .densities import pt_logd_cumdircategorical_mx_ma, pt_logd_dirichlet_mx_ma, \
     pt_logd_pareto_mx_ma
 from .samplers import bincount2D_vectorized
 np.seterr(divide = 'ignore')

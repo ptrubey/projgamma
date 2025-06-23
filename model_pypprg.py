@@ -7,7 +7,7 @@ from typing import Self
 
 from .samplers import GEMPrior, GammaPrior, StickBreakingSampler, stickbreak,  \
     py_sample_chi_bgsb, py_sample_cluster_bgsb
-from .projgamma import log_fc_log_alpha_1_summary, log_fc_log_alpha_k_summary, \
+from .densities import log_fc_log_alpha_1_summary, log_fc_log_alpha_k_summary, \
     pt_logd_projgamma_my_mt
 from .data import Data, Projection, euclidean_to_hypercube
 Prior = namedtuple('Prior', 'alpha beta chi')
