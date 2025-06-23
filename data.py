@@ -1,9 +1,9 @@
-from dataclasses import dataclass
+from typing import Self
 import numpy as np
 import numpy.typing as npt
-from genpareto import gpd_fit
-from cdf import ECDF
-from typing import Self
+
+from .genpareto import gpd_fit
+from .cdf import ECDF
 
 EPS = np.finfo(float).eps
 MAX = np.finfo(float).max

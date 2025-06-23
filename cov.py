@@ -1,7 +1,6 @@
 """ online updating of covariance matrices """
 import numpy as np
 import numpy.typing as npt
-from scipy import sparse
 EPS = np.finfo(float).eps
 
 class OnlineCovariance(object):

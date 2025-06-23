@@ -7,7 +7,8 @@ from collections import defaultdict
 from math import log, sqrt
 from sklearn.metrics import pairwise_distances
 from multiprocessing import Pool, cpu_count
-from energy import limit_cpu
+
+from .energy import limit_cpu
 
 def check_shape(data1 : npt.NDArray[Any], data2 : npt.NDArray[Any]) -> None:
     assert len(data1.shape) == 2

@@ -2,8 +2,8 @@ import numpy as np
 import multiprocessing as mp
 from itertools import repeat, product
 
-from energy import limit_cpu
-from data import Data
+from .energy import limit_cpu
+from .data import Data
 
 def condsurv_helper(args):
     """ Helper function for conditional survival """
