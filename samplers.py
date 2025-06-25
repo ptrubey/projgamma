@@ -14,7 +14,7 @@ DirichletProcessSampler assumes the existence of:
 """
 import numpy as np
 import numpy.typing as npt
-from typing import Self
+from typing import Self, NamedTuple
 from collections.abc import Callable
 np.seterr(divide = 'raise', invalid = 'raise')
 from numpy.random import beta, uniform, gamma
@@ -28,18 +28,32 @@ from io import BytesIO
 EPS = np.finfo(float).eps
 MAX = np.finfo(float).max
 
-# Tuples for storing priors
-GammaPrior     = namedtuple('GammaPrior', 'a b')
-DirichletPrior = namedtuple('DirichletPrior', 'a')
-BetaPrior      = namedtuple('BetaPrior', 'a b')
-UniNormalPrior = namedtuple('UniNormalPrior','mu sigma')
-InvGammaPrior  = namedtuple('InvGammaPrior', 'a b')
-# LogNormal Models
-NormalPrior     = namedtuple('NormalPrior', 'mu SCho SInv')
-InvWishartPrior = namedtuple('InvWishartPrior', 'nu psi')
-# BNP Prior Related
-GEMPrior = namedtuple('GEMPrior', 'discount concentration')
+class GammaPrior(NamedTuple):
+    a : float
+    b : float
 
+class BetaPrior(GammaPrior): pass 
+class InvGammaPrior(GammaPrior): pass
+
+class DirichletPrior(NamedTuple):
+    a : float
+
+class UniNormalPrior(NamedTuple):
+    mu    : float
+    sigma : float
+
+class NormalPrior(NamedTuple):
+    mu   : npt.NDArray[np.float64] | float
+    Scho : npt.NDArray[np.float64] | float
+    Sinv : npt.NDArray[np.float64] | float
+
+class InvWishartPrior(NamedTuple):
+    nu   : int
+    psi  : npt.NDArray[np.float64] | float
+
+class GEMPrior(NamedTuple):
+    discount      : float
+    concentration : float
 
 def bincount2D_vectorized(arr : npt.NDArray[np.int32], m : int) -> npt.NDArray[np.int32]:
     """
@@ -58,8 +72,8 @@ class BaseSampler(object):
     print_string_before = '\rSampling 0% Completed'
     print_string_during = '\rSampling {:.1%} Completed in {}'
     print_string_after = '\rSampling 100% Completed in {}'
-    curr_iter : int = None
-    start_time : float = None
+    curr_iter : int
+    start_time : float
 
     def initialize_sampler(self, ns : int) -> None:
         raise NotImplementedError('Replace me!')
@@ -109,9 +123,30 @@ class BaseSampler(object):
             print(ps)
         return
 
+class SamplesBase(object):
+    def to_dict(self, nBurn : int, nThin : int) -> dict:
+        raise NotImplementedError('Replace me!')
+    
+    @classmethod
+    def from_dict(cls, out : dict) -> Self:
+        return cls(**out)
+    
+    @classmethod
+    def from_meta(
+            cls, 
+            nSamp  : int, 
+            nDat   : int, 
+            nCol   : int, 
+            nClust : int,
+            ) -> Self:
+        raise NotImplementedError('Replace me!')
+    pass
+
+
 class CRPSampler(BaseSampler):
-    print_string_during = '\rSampling {:.1%} Completed in {}, {} Clusters'
-    print_string_after  = '\rSampling 100% Completed in {}, {} Clusters Avg.'
+    print_string_during : str = '\rSampling {:.1%} Completed in {}, {} Clusters'
+    print_string_after  : str = '\rSampling 100% Completed in {}, {} Clusters Avg.'
+    samples : SamplesBase
 
     @property
     def curr_delta(self) -> npt.NDArray[np.int32]:

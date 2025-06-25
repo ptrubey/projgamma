@@ -3,22 +3,26 @@ import numpy.typing as npt
 np.seterr(divide='raise', over = 'raise', under = 'ignore', invalid = 'raise')
 from numpy.random import gamma, uniform, beta, normal
 from collections import namedtuple
-from typing import Self
+from typing import Self, NamedTuple
 
-from .samplers import GEMPrior, GammaPrior, StickBreakingSampler, stickbreak,  \
-    py_sample_chi_bgsb, py_sample_cluster_bgsb
+from .samplers import GEMPrior, GammaPrior, StickBreakingSampler, SamplesBase, \
+    stickbreak, py_sample_chi_bgsb, py_sample_cluster_bgsb
 from .densities import log_fc_log_alpha_1_summary, log_fc_log_alpha_k_summary, \
     pt_logd_projgamma_my_mt
 from .data import Data, Projection, euclidean_to_hypercube
-Prior = namedtuple('Prior', 'alpha beta chi')
 
-class Samples(object):
-    zeta  : npt.NDArray[np.float64] = None
-    alpha : npt.NDArray[np.float64] = None
-    beta  : npt.NDArray[np.float64] = None
-    chi   : npt.NDArray[np.float64] = None
-    r     : npt.NDArray[np.float64] = None
-    delta : npt.NDArray[np.int32]   = None
+class Prior(NamedTuple):
+    alpha : GammaPrior
+    beta  : GammaPrior
+    chi   : GEMPrior
+
+class Samples(SamplesBase):
+    zeta  : npt.NDArray[np.float64] 
+    alpha : npt.NDArray[np.float64] 
+    beta  : npt.NDArray[np.float64]
+    chi   : npt.NDArray[np.float64]
+    r     : npt.NDArray[np.float64]
+    delta : npt.NDArray[np.int32]
 
     def to_dict(self, nBurn, nThin) -> dict:
         out = {
@@ -31,10 +35,6 @@ class Samples(object):
             }
         return out
     
-    @classmethod
-    def from_dict(cls, out) -> Self:
-        return cls(**out)
-
     @classmethod
     def from_meta(
             cls, 
@@ -75,7 +75,7 @@ class Chain(StickBreakingSampler, Projection):
     data          : Data
     concentration : float
     discount      : float
-    priors        : Prior[GammaPrior, GammaPrior, GEMPrior]
+    priors        : Prior
 
     @property
     def curr_zeta(self) -> npt.NDArray[np.float64]:

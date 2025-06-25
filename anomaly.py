@@ -9,7 +9,8 @@ import numpy.typing as npt
 import pandas as pd
 import matplotlib.pyplot as plt
 # builtins explicitly imported
-from multiprocessing import pool as mcpool, cpu_count, Pool
+from multiprocessing.pool import Pool
+from multiprocessing import cpu_count
 from scipy.special import gammaln
 from numpy.random import gamma
 from itertools import repeat
@@ -32,7 +33,7 @@ from .energy import limit_cpu, kde_per_obs, manhattan_distance_matrix,          
     multi_kde_per_obs
 from .densities import pt_logd_cumdircategorical_mx_ma, pt_logd_dirichlet_mx_ma, \
     pt_logd_pareto_mx_ma
-from .samplers import bincount2D_vectorized
+from .samplers import bincount2D_vectorized, SamplesBase
 np.seterr(divide = 'ignore')
 
 # Globals
@@ -92,9 +93,14 @@ class Anomaly(Projection):
             an existing pool rather than making a new one every time.
     """
     postpred_per_samp = 1
+    samples : SamplesBase
+    nCol : int
+    nDat : int
+    nSamp : int
 
     # Parallelism
-    pool = None
+    pool : Pool
+
     def pools_open(self, cpu_prop : float = 0.75) -> None:
         self.pool = Pool(
             processes = int(cpu_prop * cpu_count()),
@@ -105,6 +111,7 @@ class Anomaly(Projection):
     def pools_closed(self) -> None:
         self.pool.close()
         self.pool.join()
+        self.pool.terminate()
         del self.pool
         return
     

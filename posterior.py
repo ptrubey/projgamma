@@ -7,7 +7,7 @@ import varbayes as vb
 import pandas as pd
 import numpy as np
 import trees
-from projgamma import pt_logd_projgamma_my_mt_inplace_unstable
+from .densities import pt_logd_projgamma_my_mt_inplace_unstable
 from collections import defaultdict
 from scipy.special import softmax
 

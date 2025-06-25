@@ -8,15 +8,15 @@ from collections import namedtuple
 # np.seterr(invalid='raise')
 EPS = np.finfo(float).eps
 
-from .samplers import ParallelTemperingStickBreakingSampler,                     \
-    bincount2D_vectorized, pt_py_sample_chi_bgsb, pt_py_sample_cluster_bgsb,    \
+from .samplers import ParallelTemperingStickBreakingSampler, SamplesBase,      \
+    bincount2D_vectorized, pt_py_sample_chi_bgsb, pt_py_sample_cluster_bgsb,   \
     NormalPrior, InvWishartPrior, GEMPrior
-from .data import Projection, Data, category_matrix, euclidean_to_catprob,       \
+from .data import Projection, Data, category_matrix, euclidean_to_catprob,     \
     euclidean_to_hypercube, euclidean_to_psphere, euclidean_to_simplex
-from .densities import pt_logd_cumdircategorical_mx_ma_inplace_unstable,         \
-    pt_logd_mvnormal_mx_st, logd_mvnormal_mx_st, logd_invwishart_ms,            \
-    pt_logd_cumdirmultinom_paired_yt, pt_logd_projgamma_my_mt_inplace_unstable, \
-    pt_logd_projgamma_paired_yt, pt_logd_pareto_mx_ma_inplace_unstable,         \
+from .densities import pt_logd_cumdircategorical_mx_ma_inplace_unstable,       \
+    pt_logd_mvnormal_mx_st, logd_mvnormal_mx_st, logd_invwishart_ms,           \
+    pt_logd_cumdirmultinom_paired_yt, pt_logd_projgamma_my_mt_inplace_unstable,\
+    pt_logd_projgamma_paired_yt, pt_logd_pareto_mx_ma_inplace_unstable,        \
     pt_logd_pareto_paired_yt
 from .cov import PerObsTemperedOnlineCovariance
 
