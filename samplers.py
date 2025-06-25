@@ -12,17 +12,16 @@ DirichletProcessSampler assumes the existence of:
     obj.samples.delta
     obj.curr_delta
 """
-import numpy as np
-import numpy.typing as npt
-from typing import Self, NamedTuple
-from collections.abc import Callable
-np.seterr(divide = 'raise', invalid = 'raise')
-from numpy.random import beta, uniform, gamma
-from scipy.special import betaln, softmax, log_softmax
-from collections import namedtuple
 import time
 import os
 import pickle
+import numpy as np
+import numpy.typing as npt
+np.seterr(divide = 'raise', invalid = 'raise')
+from typing import Self, NamedTuple
+from collections.abc import Callable
+from numpy.random import beta, uniform, gamma
+from scipy.special import betaln, softmax, log_softmax
 from io import BytesIO
 
 EPS = np.finfo(float).eps
@@ -31,26 +30,20 @@ MAX = np.finfo(float).max
 class GammaPrior(NamedTuple):
     a : float
     b : float
-
 class BetaPrior(GammaPrior): pass 
 class InvGammaPrior(GammaPrior): pass
-
 class DirichletPrior(NamedTuple):
     a : float
-
 class UniNormalPrior(NamedTuple):
     mu    : float
     sigma : float
-
 class NormalPrior(NamedTuple):
     mu   : npt.NDArray[np.float64] | float
     Scho : npt.NDArray[np.float64] | float
     Sinv : npt.NDArray[np.float64] | float
-
 class InvWishartPrior(NamedTuple):
     nu   : int
     psi  : npt.NDArray[np.float64] | float
-
 class GEMPrior(NamedTuple):
     discount      : float
     concentration : float

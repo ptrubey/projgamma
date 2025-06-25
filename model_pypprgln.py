@@ -1,9 +1,9 @@
 import numpy as np
 import numpy.typing as npt
+from typing import Self, NamedTuple
 from numpy.random import choice, gamma, uniform, normal
 from scipy.stats import invwishart
 from numpy.linalg import cholesky, inv
-from collections import namedtuple
 
 # np.seterr(invalid='raise')
 EPS = np.finfo(float).eps
@@ -20,14 +20,17 @@ from .densities import pt_logd_cumdircategorical_mx_ma_inplace_unstable,       \
     pt_logd_pareto_paired_yt
 from .cov import PerObsTemperedOnlineCovariance
 
-Prior = namedtuple('Prior', 'mu Sigma chi')
+class Prior(NamedTuple):
+    mu    : NormalPrior
+    Sigma : InvWishartPrior
+    chi   : GEMPrior
 
-class Samples(object):
-    zeta  = None
-    mu    = None
-    Sigma = None
-    delta = None
-    chi   = None
+class Samples(SamplesBase):
+    zeta  : npt.NDArray[np.float64]
+    mu    : npt.NDArray[np.float64]
+    Sigma : npt.NDArray[np.float64]
+    chi   : npt.NDArray[np.float64]
+    delta : npt.NDArray[np.int32]
 
     def to_dict(self, nBurn : int = 0, nThin : int = 1) -> dict:
         out = {
@@ -38,11 +41,7 @@ class Samples(object):
             'chi'   : self.chi[(nBurn+1)   :: nThin, 0],
             }
         return out
-
-    @classmethod
-    def from_dict(cls, out):
-        return cls(**out)
-
+    
     @classmethod
     def from_meta(
             cls, 
@@ -51,7 +50,7 @@ class Samples(object):
             tCol : int, 
             nTemp : int, 
             nTrunc : int
-            ):
+            ) -> Self:
         zeta  = np.empty((nSamp + 1, nTemp, nTrunc, tCol))
         mu    = np.empty((nSamp + 1, nTemp, tCol))
         Sigma = np.empty((nSamp + 1, nTemp, tCol, tCol))
@@ -84,6 +83,8 @@ class Samples_(Samples):
         return
 
 class Chain(ParallelTemperingStickBreakingSampler, Projection):
+    samples : Samples
+
     @property
     def curr_zeta(self) -> npt.NDArray[np.float64]:
         return self.samples.zeta[self.curr_iter]
