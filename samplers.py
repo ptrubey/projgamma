@@ -62,9 +62,9 @@ def bincount2D_vectorized(arr : npt.NDArray[np.int32], m : int) -> npt.NDArray[n
     return np.bincount(arr_offs.ravel(), minlength=arr.shape[0] * m).reshape(-1, m)
 
 class BaseSampler(object):
-    print_string_before = '\rSampling 0% Completed'
-    print_string_during = '\rSampling {:.1%} Completed in {}'
-    print_string_after = '\rSampling 100% Completed in {}'
+    print_string_before : str = '\rSampling 0% Completed'
+    print_string_during : str = '\rSampling {:.1%} Completed in {}'
+    print_string_after  : str = '\rSampling 100% Completed in {}'
     curr_iter : int
     start_time : float
 
@@ -135,6 +135,16 @@ class SamplesBase(object):
         raise NotImplementedError('Replace me!')
     pass
 
+class VariationalBase(object):
+    def to_dict(self) -> dict:
+        raise NotImplementedError('Replace me!')
+    @classmethod
+    def from_dict(cls, out) -> Self:
+        raise NotImplementedError('Replace me!')
+    @classmethod
+    def from_meta(cls, **kwargs) -> Self:
+        raise NotImplementedError('Replace me!')
+    pass
 
 class CRPSampler(BaseSampler):
     print_string_during : str = '\rSampling {:.1%} Completed in {}, {} Clusters'

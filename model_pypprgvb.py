@@ -1,22 +1,25 @@
 import numpy as np
 import numpy.typing as npt
-from typing import Self
-from collections.abc import Callable
+from typing import Self, NamedTuple
 from numpy.random import choice, gamma, uniform, normal, lognormal
-from collections import namedtuple, deque
+from collections import deque
 from scipy.special import digamma
 
 # Custom Modules
-from .samplers import Adam, GammaPrior, GEMPrior, StickBreakingSampler,         \
-    py_sample_chi_bgsb, py_sample_cluster_bgsb, stickbreak
+from .samplers import Adam, GammaPrior, GEMPrior, StickBreakingSampler,        \
+    VariationalBase, SamplesBase, stickbreak,                                  \
+    py_sample_chi_bgsb, py_sample_cluster_bgsb
 from .data import euclidean_to_hypercube, Data, Projection
 from .densities import  logd_projgamma_my_mt_inplace_unstable
 
 np.seterr(divide = 'raise', over = 'raise', under = 'ignore', invalid = 'raise')
 
-Prior = namedtuple('Prior','alpha beta chi')
+class Prior(NamedTuple):
+    alpha : GammaPrior
+    beta  : GammaPrior
+    chi   : GEMPrior
 
-class Samples(object):
+class Samples(SamplesBase):
     r     : deque[npt.NDArray[np.float64]] | npt.NDArray[np.float64] # radius (projected gamma)
     chi   : deque[npt.NDArray[np.float64]] | npt.NDArray[np.float64] # stick-breaking weights (unnormalized)
     delta : deque[npt.NDArray[np.int32]]   | npt.NDArray[np.int32]   # cluster identifiers
@@ -36,11 +39,7 @@ class Samples(object):
         return out
     
     @classmethod
-    def from_dict(cls, out) -> Self:
-        return cls(**out)
-
-    @classmethod
-    def from_meta(cls, nkeep : int, N : int, S : int, J : int):
+    def from_meta(cls, nkeep : int, N : int, S : int, J : int) -> Self:
         r     = deque([], maxlen = nkeep)
         chi   = deque([], maxlen = nkeep)
         delta = deque([], maxlen = nkeep)
@@ -126,7 +125,7 @@ def gradient_gammagamma_ln(
     
     return dtheta.mean(axis = 0)
 
-class VariationalParameters(object):
+class VariationalParameters(VariationalBase):
     logzeta : Adam
     logalpha : Adam
 
@@ -407,7 +406,6 @@ class Result(object):
         return
     
 if __name__ == '__main__':
-    # raw = pd.read_csv('./datasets/ivt_updated_nov_mar.csv')
     import pandas as pd
     raw = pd.read_csv('./datasets/ivt_nov_mar.csv').values
     data = Data.from_raw(
