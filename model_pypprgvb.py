@@ -132,7 +132,7 @@ class VariationalParameters(VariationalBase):
     def to_dict(self) -> dict:
         out = {
             'logzeta'   : self.logzeta.to_dict(),
-            'logaalpha' : self.logalpha.to_dict(),
+            'logalpha' : self.logalpha.to_dict(),
             }
         return out
     
@@ -140,8 +140,8 @@ class VariationalParameters(VariationalBase):
     def from_meta(cls, S : int, J : int, **kwargs) -> Self:
         logzeta_mutau = np.zeros((2, J, S))
         logalpha_mutau = np.zeros((2, S))
-        logzeta = Adam(logzeta_mutau, **kwargs)
-        logalpha = Adam(logalpha_mutau, **kwargs)
+        logzeta = Adam.from_meta(logzeta_mutau, **kwargs)
+        logalpha = Adam.from_meta(logalpha_mutau, **kwargs)
         return cls(logzeta = logzeta, logalpha = logalpha)
 
     @classmethod
@@ -155,15 +155,15 @@ class VariationalParameters(VariationalBase):
             logzeta : Adam,
             logalpha : Adam,
             ):
-        self.logzeta = logzeta,
-        self.logalpha = logalpha,
+        self.logzeta = logzeta
+        self.logalpha = logalpha
         return
     pass
 
 class Chain(StickBreakingSampler, Projection):
     samples       : Samples
     varparm       : VariationalParameters
-    priors        : Prior[GammaPrior,GammaPrior,GEMPrior]
+    priors        : Prior
     concentration : float
     discount      : float
     N             : int
@@ -208,8 +208,8 @@ class Chain(StickBreakingSampler, Projection):
         n = dmat.sum(axis = 0)
         lYs = dmat.T @ np.log(Y) # (np.log(Y).T @ dmat).T
         
-        func = lambda: - gradient_resgammagamma_ln(
-            self.varparm.logzeta.theta, lYs, n, alpha, beta, self.var_samp,
+        func = lambda theta: - gradient_resgammagamma_ln(
+            theta, lYs, n, alpha, beta, self.var_samp,
             )
 
         self.varparm.logzeta.specify_dloss(func)
@@ -228,8 +228,8 @@ class Chain(StickBreakingSampler, Projection):
         lZs = np.log(zeta)[active].sum(axis = 0)
         Zs  = zeta[active].sum(axis = 0)
 
-        func = lambda: - gradient_gammagamma_ln(
-            self.varparm.logalpha.theta, 
+        func = lambda theta: - gradient_gammagamma_ln(
+            theta, 
             lZs, Zs, n,
             *self.priors.alpha,
             *self.priors.beta,
@@ -270,7 +270,7 @@ class Chain(StickBreakingSampler, Projection):
     
     def update_chi(self, delta : npt.NDArray[np.int32]) -> None:
         chi = py_sample_chi_bgsb(
-            delta, self.discount, self.concentration, self.J,
+            delta, self.priors.chi.discount, self.priors.chi.concentration, self.J,
             )
         self.samples.chi.append(chi)
         return
@@ -306,8 +306,8 @@ class Chain(StickBreakingSampler, Projection):
         return
 
     def initialize_sampler(self, nSamp : int) -> None:
-        self.samples = Samples(self.gibbs_samp, self.N, self.S, self.J)
-        self.varparm = VariationalParameters(
+        self.samples = Samples.from_meta(self.gibbs_samp, self.N, self.S, self.J)
+        self.varparm = VariationalParameters.from_meta(
             self.S, self.J, niter = self.var_iter,
             )
         self.curr_iter = 0

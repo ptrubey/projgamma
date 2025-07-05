@@ -8,7 +8,7 @@ from typing import Self, NamedTuple
 from .samplers import GEMPrior, GammaPrior, StickBreakingSampler, SamplesBase, \
     stickbreak, py_sample_chi_bgsb, py_sample_cluster_bgsb
 from .densities import log_fc_log_alpha_1_summary, log_fc_log_alpha_k_summary, \
-    pt_logd_projgamma_my_mt
+    logd_projgamma_my_mt_inplace_unstable
 from .data import Data, Projection, euclidean_to_hypercube
 
 class Prior(NamedTuple):
@@ -157,8 +157,8 @@ class Chain(StickBreakingSampler, Projection):
         lz_curr = np.log(zeta)
         lz_cand = lz_curr + normal(scale = 0.2, size = lz_curr.shape)
 
-        lfc_curr = log_fc_log_alpha_1_summary(lz_curr, n[:,None], Ys, lYs, alpha, beta)
-        lfc_cand = log_fc_log_alpha_1_summary(lz_cand, n[:,None], Ys, lYs, alpha, beta)
+        lfc_curr = log_fc_log_alpha_1_summary(lz_curr, n[:,None], Ys, lYs, GammaPrior(alpha, beta))
+        lfc_cand = log_fc_log_alpha_1_summary(lz_cand, n[:,None], Ys, lYs, GammaPrior(alpha, beta))
 
         accept = np.log(uniform(size = alpha.shape)) < lfc_cand - lfc_curr
         accept = uniform(size = alpha.shape) < np.exp(lfc_cand - lfc_curr)
@@ -206,12 +206,16 @@ class Chain(StickBreakingSampler, Projection):
         """
         Samples latent cluster identifiers
         """
-        ll = pt_logd_projgamma_my_mt(self.data.Yp, zeta)
-        return py_sample_cluster_bgsb(chi, ll)
+        # return py_sample_cluster_bgsb(chi, ll)
+        llk = np.zeros((self.nDat, self.max_clust_count))
+        logd_projgamma_my_mt_inplace_unstable(
+            llk, self.data.Yp, zeta, np.ones(zeta.shape),
+            )
+        return py_sample_cluster_bgsb(chi, llk)
 
     def initialize_sampler(self, ns) -> None:
         self.curr_iter = 0
-        self.samples = Samples.from_meta(ns, self.nDat, self.nCol)
+        self.samples = Samples.from_meta(ns, self.nDat, self.nCol, self.max_clust_count)
         self.samples.alpha[0] = 1.
         self.samples.beta[0] = 1.
         self.samples.zeta[0] = gamma(
@@ -219,8 +223,8 @@ class Chain(StickBreakingSampler, Projection):
             size = (self.max_clust_count, self.nCol)
             )
         self.samples.chi[0] = beta(
-            1 - self.discount, 
-            self.concentration + self.discount * np.arange(1, self.max_clust_count),
+            1 - self.priors.chi.discount, 
+            self.priors.chi.concentration + self.priors.chi.discount * np.arange(1, self.max_clust_count),
             )
         self.samples.delta[0] = self.sample_delta(self.curr_chi, self.curr_zeta)
         self.samples.r[0] = self.sample_r(self.curr_delta, self.curr_zeta)

@@ -584,7 +584,7 @@ class Adam(object):
 
     def update(self) -> None:
         self.iter += 1
-        dloss = self.dloss(self.theta)
+        dloss = self.dloss(theta = self.theta)
         self.momentum[:] = (
             + self.decay1 * self.momentum
             + (1 - self.decay1) * dloss
