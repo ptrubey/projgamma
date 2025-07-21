@@ -5,10 +5,13 @@ from numpy.random import gamma, uniform, beta, normal
 from collections import namedtuple
 from typing import Self, NamedTuple
 
-from .samplers import GEMPrior, GammaPrior, StickBreakingSampler, SamplesBase, \
-    stickbreak, py_sample_chi_bgsb, py_sample_cluster_bgsb
-from .densities import log_fc_log_alpha_1_summary, log_fc_log_alpha_k_summary, \
+from .priors import GEMPrior, GammaPrior
+from .samplers import StickBreakingSampler, SamplesBase, stickbreak,            \
+    py_sample_chi_bgsb, py_sample_cluster_bgsb
+from .densities import log_fc_log_alpha_1_summary, log_fc_log_alpha_k_summary,  \
     logd_projgamma_my_mt_inplace_unstable
+from .density_gamma import logp_resgamma_gamma_logshape_summary,                \
+    logp_gammagamma_logshape_summary
 from .data import Data, Projection, euclidean_to_hypercube
 
 class Prior(NamedTuple):

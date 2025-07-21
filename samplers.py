@@ -27,27 +27,6 @@ from io import BytesIO
 EPS = np.finfo(float).eps
 MAX = np.finfo(float).max
 
-class GammaPrior(NamedTuple):
-    a : float
-    b : float
-class BetaPrior(GammaPrior): pass 
-class InvGammaPrior(GammaPrior): pass
-class DirichletPrior(NamedTuple):
-    a : float
-class UniNormalPrior(NamedTuple):
-    mu    : float
-    sigma : float
-class NormalPrior(NamedTuple):
-    mu   : npt.NDArray[np.float64] | float
-    Scho : npt.NDArray[np.float64] | float
-    Sinv : npt.NDArray[np.float64] | float
-class InvWishartPrior(NamedTuple):
-    nu   : int
-    psi  : npt.NDArray[np.float64] | float
-class GEMPrior(NamedTuple):
-    discount      : float
-    concentration : float
-
 def bincount2D_vectorized(arr : npt.NDArray[np.int32], m : int) -> npt.NDArray[np.int32]:
     """
     code from stackoverflow:

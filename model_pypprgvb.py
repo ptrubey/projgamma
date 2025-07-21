@@ -6,11 +6,11 @@ from collections import deque
 from scipy.special import digamma
 
 # Custom Modules
-from .samplers import Adam, GammaPrior, GEMPrior, StickBreakingSampler,        \
-    VariationalBase, SamplesBase, stickbreak,                                  \
-    py_sample_chi_bgsb, py_sample_cluster_bgsb
+from .priors import GammaPrior, GEMPrior
+from .samplers import Adam, StickBreakingSampler, VariationalBase, SamplesBase, \
+    stickbreak, py_sample_chi_bgsb, py_sample_cluster_bgsb
 from .data import euclidean_to_hypercube, Data, Projection
-from .densities import  logd_projgamma_my_mt_inplace_unstable
+from .densities import logd_projgamma_my_mt_inplace_unstable 
 
 np.seterr(divide = 'raise', over = 'raise', under = 'ignore', invalid = 'raise')
 

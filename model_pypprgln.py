@@ -8,9 +8,9 @@ from numpy.linalg import cholesky, inv
 # np.seterr(invalid='raise')
 EPS = np.finfo(float).eps
 
+from .priors import NormalPrior, InvWishartPrior, GEMPrior
 from .samplers import ParallelTemperingStickBreakingSampler, SamplesBase,      \
-    bincount2D_vectorized, pt_py_sample_chi_bgsb, pt_py_sample_cluster_bgsb,   \
-    NormalPrior, InvWishartPrior, GEMPrior
+    bincount2D_vectorized, pt_py_sample_chi_bgsb, pt_py_sample_cluster_bgsb    
 from .data import Projection, Data, category_matrix, euclidean_to_catprob,     \
     euclidean_to_hypercube, euclidean_to_psphere, euclidean_to_simplex
 from .densities import pt_logd_cumdircategorical_mx_ma_inplace_unstable,       \
