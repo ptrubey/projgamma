@@ -10,7 +10,7 @@ from .priors import GammaPrior, GEMPrior
 from .samplers import Adam, StickBreakingSampler, VariationalBase, SamplesBase, \
     stickbreak, py_sample_chi_bgsb, py_sample_cluster_bgsb
 from .data import euclidean_to_hypercube, Data, Projection
-from .densities import logd_projgamma_my_mt_inplace_unstable 
+from .density_gamma import logd_projresgamma_my_mt
 
 np.seterr(divide = 'raise', over = 'raise', under = 'ignore', invalid = 'raise')
 
@@ -223,6 +223,10 @@ class Chain(StickBreakingSampler, Projection):
             zeta  : npt.NDArray[np.float64], 
             delta : npt.NDArray[np.float64],
             ) -> None:
+        """
+        Variational approximation for hierarchical shape parameter for zeta.
+        Assume beta has been integrated out.
+        """
         active = np.where(np.bincount(delta, minlength = self.J) > 0)[0]
         n = np.array((active.shape[0],))
         lZs = np.log(zeta)[active].sum(axis = 0)
@@ -248,9 +252,12 @@ class Chain(StickBreakingSampler, Projection):
             alpha : npt.NDArray[np.float64], 
             delta : npt.NDArray[np.int32],
             ) -> None:
-        active = np.where(np.bincount(delta, minlength = self.J) > 0)[0]
-        n = active.shape[0]
-        zs = zeta[active].sum(axis = 0)
+        """
+        Samples hierarchical rate parameter for zeta.
+        """
+        active_zeta = zeta[np.unique(delta)]
+        n = active_zeta.shape[0]
+        zs = active_zeta.sum(axis = 0)
         As = n * alpha + self.priors.beta.a
         Bs = zs + self.priors.beta.b
         self.samples.beta.append(gamma(shape = As, scale = 1 / Bs))
@@ -264,13 +271,16 @@ class Chain(StickBreakingSampler, Projection):
         As = zeta[delta].sum(axis = -1)  # np.einsum('il->i', zeta[delta])
         Bs = self.data.Yp.sum(axis = -1) # np.einsum('il->i', self.data.Yp)
         r = gamma(shape = As, scale = 1 / Bs)
-        r[r < 1e-4] = 1e-4               # lower-bounding radius
+        # r[r < 1e-4] = 1e-4               # lower-bounding radius
         self.samples.r.append(r)
         return
     
     def update_chi(self, delta : npt.NDArray[np.int32]) -> None:
         chi = py_sample_chi_bgsb(
-            delta, self.priors.chi.discount, self.priors.chi.concentration, self.J,
+            delta, 
+            self.priors.chi.discount, 
+            self.priors.chi.concentration, 
+            self.J,
             )
         self.samples.chi.append(chi)
         return
@@ -280,11 +290,8 @@ class Chain(StickBreakingSampler, Projection):
             zeta : npt.NDArray[np.float64], 
             chi  : npt.NDArray[np.float64],
             ) -> None:
-        llk = np.zeros((self.N, self.J))
-        logd_projgamma_my_mt_inplace_unstable(
-            llk, self.data.Yp, zeta, np.ones(zeta.shape),
-            )
-        delta = py_sample_cluster_bgsb(chi, llk)
+        llk = logd_projresgamma_my_mt(y = self.data.Yp, shape = zeta)
+        delta = py_sample_cluster_bgsb(chi = chi, log_likelihood = llk)
         self.samples.delta.append(delta)
         return
 
@@ -406,22 +413,6 @@ class Result(object):
         return
     
 if __name__ == '__main__':
-    import pandas as pd
-    raw = pd.read_csv('./datasets/ivt_nov_mar.csv').values
-    data = Data.from_raw(
-        raw, 
-        xh1t_cols = np.arange(raw.shape[1]),
-        dcls = True, 
-        xhquant = 0.95,
-        )
-    model = Chain(data, p = 10, gibbs_samples = 1000,)
-    model.sample(5000, verbose = True)
-    out = model.to_dict()
-    res = Result(out)
-    cond_zetas  = res.generate_conditional_posterior_predictive_zetas()
-    cond_gammas = res.generate_conditional_posterior_predictive_gammas()
-    zetas       = res.generate_posterior_predictive_zetas()
-    gammas      = res.generate_posterior_predictive_gammas()
-    raise
+    pass
 
 # EOF

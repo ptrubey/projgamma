@@ -15,7 +15,8 @@ from scipy.stats import gamma
 from scipy.stats import norm as normal
 from scipy.stats import uniform
 
-from .samplers import log_stickbreak, GammaPrior
+from .samplers import log_stickbreak
+from .priors import GammaPrior
 
 ## Functions related to projected gamma density
 

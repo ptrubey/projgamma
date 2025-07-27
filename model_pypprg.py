@@ -8,10 +8,8 @@ from typing import Self, NamedTuple
 from .priors import GEMPrior, GammaPrior
 from .samplers import StickBreakingSampler, SamplesBase, stickbreak,            \
     py_sample_chi_bgsb, py_sample_cluster_bgsb
-from .densities import log_fc_log_alpha_1_summary, log_fc_log_alpha_k_summary,  \
-    logd_projgamma_my_mt_inplace_unstable
 from .density_gamma import logp_resgamma_gamma_logshape_summary,                \
-    logp_gammagamma_logshape_summary
+    logp_gamma_gamma_logshape_summary, logd_projresgamma_my_mt
 from .data import Data, Projection, euclidean_to_hypercube
 
 class Prior(NamedTuple):
@@ -109,18 +107,21 @@ class Chain(StickBreakingSampler, Projection):
         Samples hierarchical shape parameter for zeta.
             assumes rate parameter (beta) integrated out.
         """
-        active_zeta = zeta[np.unique(delta)]
-        n = active_zeta.shape[0]
-        zs = active_zeta.sum(axis = 0)
-        lzs = np.log(active_zeta).sum(axis = 0)
+        active_zeta = zeta[np.unique(delta)]    # (j', d)
+        n = np.array([active_zeta.shape[0]])    # (1)
+        zs = active_zeta.sum(axis = 0)          # (d)
+        lzs = np.log(active_zeta).sum(axis = 0) # (d)
+        
         la_curr = np.log(alpha)
-        la_cand = np.log(alpha) + normal(scale = 0.15, size = alpha.shape)
-        lfc_curr = log_fc_log_alpha_k_summary(
-            la_curr, np.array(n), zs, lzs, self.priors.alpha, self.priors.beta,
-            )
-        lfc_cand = log_fc_log_alpha_k_summary(
-            la_cand, np.array(n), zs, lzs, self.priors.alpha, self.priors.beta,
-            )
+        la_cand = np.log(alpha) + normal(scale = 0.1, size = alpha.shape)
+
+        logp = lambda logalpha: logp_gamma_gamma_logshape_summary(
+            logalpha[None,None], lzs[None,None], zs[None,None], n[None], 
+            self.priors.alpha.a[None], self.priors.alpha.b[None],
+            self.priors.beta.a[None], self.priors.beta.b[None]
+            )[0,0]
+        lfc_curr = logp(la_curr)
+        lfc_cand = logp(la_cand)
         accept = np.log(uniform(size = alpha.shape)) < (lfc_cand - lfc_curr)
         la_curr[accept] = la_cand[accept]
         return np.exp(la_curr)
@@ -143,35 +144,36 @@ class Chain(StickBreakingSampler, Projection):
 
     def sample_zeta(
             self, 
-            delta : npt.NDArray[np.int32],
-            r     : npt.NDArray[np.float64], 
-            zeta  : npt.NDArray[np.float64], 
-            alpha : npt.NDArray[np.float64], 
-            beta  : npt.NDArray[np.float64],
+            delta : npt.NDArray[np.int32],    # (n)
+            r     : npt.NDArray[np.float64],  # (n)
+            zeta  : npt.NDArray[np.float64],  # (j,d)
+            alpha : npt.NDArray[np.float64],  # (d)
+            beta  : npt.NDArray[np.float64],  # (d)
             ) -> npt.NDArray[np.float64]:
         """ 
         Samples shape parameters for projected (restricted) gamma.
         """
-        dmat = delta[:,None] == np.arange(self.max_clust_count)
-        Y    = r[:,None] * self.data.Yp
-        n    = dmat.sum(axis = 0)
-        Ys  = (Y.T @ dmat).T
-        lYs = (np.log(Y).T @ dmat).T
-        lz_curr = np.log(zeta)
-        lz_cand = lz_curr + normal(scale = 0.2, size = lz_curr.shape)
+        dmat = delta[:,None] == np.arange(self.max_clust_count)       # n, j
+        Y    = r[:,None] * self.data.Yp                               # n, d
+        n    = dmat.sum(axis = 0)                                     # j
+        Ys   = (Y.T @ dmat).T                                         # j, d
+        lYs  = (np.log(Y).T @ dmat).T                                 # j, d
+        lz_curr = np.log(zeta)                                        # j, d
+        lz_cand = lz_curr + normal(scale = 0.2, size = lz_curr.shape) # j, d
 
-        lfc_curr = log_fc_log_alpha_1_summary(lz_curr, n[:,None], Ys, lYs, GammaPrior(alpha, beta))
-        lfc_cand = log_fc_log_alpha_1_summary(lz_cand, n[:,None], Ys, lYs, GammaPrior(alpha, beta))
-
-        accept = np.log(uniform(size = alpha.shape)) < lfc_cand - lfc_curr
-        accept = uniform(size = alpha.shape) < np.exp(lfc_cand - lfc_curr)
+        logp = lambda logzeta: logp_resgamma_gamma_logshape_summary(
+            logzeta[None], lYs[None], Ys[None], n[None], alpha[None], beta[None],
+            )[0]
+        lfc_curr = logp(lz_curr)
+        lfc_cand = logp(lz_cand)
+        accept = np.log(uniform(size = alpha.shape)) < (lfc_cand - lfc_curr)
         lz_curr[accept] = lz_cand[accept]
         z_new = np.exp(lz_curr)
         
         resamp = (n == 0)
         z_new[resamp] = gamma(
-            shape = alpha, scale = 1 / beta, size = z_new[resamp].shape,
-            )
+            shape = alpha, scale = 1 / beta, size = z_new.shape,
+            )[resamp]
         return z_new
 
     def sample_r(
@@ -183,8 +185,8 @@ class Chain(StickBreakingSampler, Projection):
         samples latent radii to recover independent gammas
         representation of projected (restricted) gamma.
         """
-        As = np.einsum('il->i', zeta[delta])
-        Bs = np.einsum('il->i', self.data.Yp)
+        As = zeta[delta].sum(axis = -1)
+        Bs = self.data.Yp.sum(axis = -1)
         return gamma(shape = As, scale = 1 / Bs)
     
     def sample_chi(
@@ -194,12 +196,13 @@ class Chain(StickBreakingSampler, Projection):
         """
         Samples stick-breaking unnormalized cluster weights.
         """
-        return py_sample_chi_bgsb(
+        chi = py_sample_chi_bgsb(
             delta,
             disc = self.priors.chi.discount,
             conc = self.priors.chi.concentration,
             trunc = self.max_clust_count,
             )
+        return chi
     
     def sample_delta(
             self,
@@ -209,12 +212,8 @@ class Chain(StickBreakingSampler, Projection):
         """
         Samples latent cluster identifiers
         """
-        # return py_sample_cluster_bgsb(chi, ll)
-        llk = np.zeros((self.nDat, self.max_clust_count))
-        logd_projgamma_my_mt_inplace_unstable(
-            llk, self.data.Yp, zeta, np.ones(zeta.shape),
-            )
-        return py_sample_cluster_bgsb(chi, llk)
+        llk = logd_projresgamma_my_mt(y = self.data.Yp, shape = zeta)
+        return py_sample_cluster_bgsb(chi = chi, log_likelihood = llk)
 
     def initialize_sampler(self, ns) -> None:
         self.curr_iter = 0
@@ -260,8 +259,6 @@ class Chain(StickBreakingSampler, Projection):
             'samples' : self.samples.to_dict(nBurn, nThin),
             'data'    : self.data.to_dict(),
             'prior'   : self.priors,
-            'conc'    : self.concentration,
-            'disc'    : self.discount
             }
         return out 
 
@@ -281,15 +278,15 @@ class Chain(StickBreakingSampler, Projection):
         self.nCol = self.data.nCol
         self.nDat = self.data.nDat
         self.priors = Prior(
-            GammaPrior(*prior_alpha), 
-            GammaPrior(*prior_beta), 
-            GEMPrior(*prior_chi),
+            GammaPrior(*[np.array([x], dtype = float) for x in prior_alpha]), 
+            GammaPrior(*[np.array([x], dtype = float) for x in prior_beta]),
+            GEMPrior(*[np.array([x], dtype = float) for x in prior_chi]),
             )
         self.set_projection()
         return
 
 class Result(object):
-    def generate_conditional_posterior_predictive_zetas(self):
+    def generate_conditional_posterior_predictive_zetas(self) -> npt.NDArray[np.float64]:
         """ rho | zeta, delta + W ~ Gamma(rho | zeta[delta] + W) """
         zetas = np.swapaxes(np.array([
             zeta[delta]
@@ -298,7 +295,7 @@ class Result(object):
             ]),0,1) # (n,s,d)
         return zetas
     
-    def generate_conditional_posterior_predictive_gammas(self):
+    def generate_conditional_posterior_predictive_gammas(self) -> npt.NDArray[np.float64]:
         """ rho | zeta, delta + W ~ Gamma(rho | zeta[delta] + W) """
         zetas = np.swapaxes(np.array([
             zeta[delta]
@@ -307,7 +304,9 @@ class Result(object):
             ]),0,1) # (n,s,d)
         return gamma(shape = zetas)
 
-    def generate_posterior_predictive_zetas(self, n_per_sample = 1, *args, **kwargs):
+    def generate_posterior_predictive_zetas(
+            self, n_per_sample = 1, *args, **kwargs
+            ) -> npt.NDArray[np.float64]:
         zetas = []
         cumprob = stickbreak(self.samples.chi).cumsum(axis = -1)
         for s in range(self.nSamp):
@@ -315,11 +314,15 @@ class Result(object):
             zetas.append(self.samples.zeta[s][delta])
         return np.vstack(zetas)
 
-    def generate_posterior_predictive_gammas(self, n_per_sample = 1, m = 10, *args, **kwargs):
+    def generate_posterior_predictive_gammas(
+            self, n_per_sample = 1, m = 10, *args, **kwargs
+            ) -> npt.NDArray[np.float64]:
         zetas = self.generate_posterior_predictive_zetas(n_per_sample, m, *args, **kwargs)
         return gamma(shape = zetas)
 
-    def generate_posterior_predictive_hypercube(self, n_per_sample = 1, m = 10, *args, **kwargs):
+    def generate_posterior_predictive_hypercube(
+            self, n_per_sample = 1, m = 10, *args, **kwargs
+            ) -> npt.NDArray[np.float64]:
         gammas = self.generate_posterior_predictive_gammas(n_per_sample, m, *args, **kwargs)
         return euclidean_to_hypercube(gammas)
 
@@ -327,8 +330,6 @@ class Result(object):
         self.samples = Samples.from_dict(out['samples'])
         self.data    = Data.from_dict(out['data'])
         self.priors  = out['prior']
-        self.concentration = out['conc']
-        self.discount      = out['disc']
         self.nSamp = self.samples.delta.shape[0]
         self.nDat  = self.samples.delta.shape[1]
         self.nCol  = self.samples.alpha.shape[1]
@@ -340,17 +341,6 @@ class Result(object):
 
 if __name__ == '__main__':
     pass
-
-    from data import Data
-    from pandas import read_csv
-    raw = read_csv('./datasets/ivt_nov_mar.csv').values
-    data = Data.from_raw(
-        raw, xh1t_cols = np.arange(raw.shape[1]), dcls = True, xhquant = 0.95,
-        )
-    model = Chain(data, p = 10)
-    model.sample(10000, verbose = True)
-    out = model.to_dict(5000, 1)
-    result = Result(out)
 
 
 # EOF
