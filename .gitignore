@@ -176,4 +176,8 @@ cython_debug/
 *.html 
 *.c
 
+# vscode
+.vscode/
+
+
 # EOF
