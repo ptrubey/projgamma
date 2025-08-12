@@ -7,8 +7,9 @@ from scipy.special import digamma
 
 # Custom Modules
 from .priors import GammaPrior, GEMPrior
-from .samplers import Adam, StickBreakingSampler, VariationalBase, SamplesBase, \
+from .samplers import StickBreakingSampler, VariationalBase, SamplesBase,       \
     stickbreak, py_sample_chi_bgsb, py_sample_cluster_bgsb
+from .varbayes import Adam
 from .data import euclidean_to_hypercube, Data, Projection
 from .density_gamma import logd_projresgamma_my_mt
 
@@ -70,7 +71,7 @@ class Samples(SamplesBase):
         return    
     pass
 
-def gradient_resgammagamma_ln(
+def grad_resgamgam_ln(
         theta   : npt.NDArray[np.float64],  # np.stack((mu, tau))    # (2, j, d)
         lYs     : npt.NDArray[np.float64],  # sum of log(Y)          # (j, d)
         n       : npt.NDArray[np.int32],    # number of observations # (j)
@@ -94,7 +95,7 @@ def gradient_resgammagamma_ln(
     dtheta[:,1] -= 1. + theta[1]
     return dtheta.mean(axis = 0)
 
-def gradient_gammagamma_ln(
+def grad_gamgam_ln(
         theta   : npt.NDArray[np.float64],  # np.stack((mu, tau))
         lYs     : npt.NDArray[np.float64],  # sum of log(Y)
         Ys      : npt.NDArray[np.float64],  # sum of Y
@@ -208,7 +209,7 @@ class Chain(StickBreakingSampler, Projection):
         n = dmat.sum(axis = 0)
         lYs = dmat.T @ np.log(Y) # (np.log(Y).T @ dmat).T
         
-        func = lambda theta: - gradient_resgammagamma_ln(
+        func = lambda theta: - grad_resgamgam_ln(
             theta, lYs, n, alpha, beta, self.var_samp,
             )
 
@@ -232,7 +233,7 @@ class Chain(StickBreakingSampler, Projection):
         lZs = np.log(zeta)[active].sum(axis = 0)
         Zs  = zeta[active].sum(axis = 0)
 
-        func = lambda theta: - gradient_gammagamma_ln(
+        func = lambda theta: - grad_gamgam_ln(
             theta, 
             lZs, Zs, n,
             *self.priors.alpha,
