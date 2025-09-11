@@ -82,7 +82,7 @@ class Adam(object):
     @classmethod
     def from_dict(cls, out : dict) -> Self:
         return cls(**out)
-
+    
     @classmethod
     def from_meta(
             cls, 
