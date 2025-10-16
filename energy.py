@@ -4,6 +4,7 @@ import os
 from multiprocessing import Pool, cpu_count, pool as mcpool
 from itertools import repeat
 from sklearn.metrics import pairwise_distances
+from .hypercube_deviance import hcdev
 
 def hypercube_distance_unsummed(args):
     return pairwise_distances(args[0], args[1].reshape(1,-1), metric = hcdev)

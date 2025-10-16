@@ -345,6 +345,7 @@ class RankTransform(DataBase):
         return
 
 class Spherical(DataBase):
+    raw = None
     V = None
     
     @classmethod
@@ -366,6 +367,7 @@ class Spherical(DataBase):
         return d
     
     def __init__(self, V):
+        self.raw = V
         self.V = V
         return
 
@@ -555,31 +557,22 @@ class Data(DataBase):
             cate : Categorical     = None,
             dcls : bool            = False,
             ) -> Self:
+        # Input Checking
         inputs = [xh1t, xh2t, sphr, rank, cate]
         filted = [x for x in inputs if x is not None]
-        # Input Checking
         assert len(filted) > 0
         #   All data have same length
         assert filted[0].raw.shape[0] > 0
         assert len(np.unique([x.raw.shape[0] for x in filted])) == 1
-        # Regime Checking
-        if (xh1t is not None) or (xh2t is not None):
-            assert (rank is None) and (sphr is None)
-            real_regime = 'threshold'
-        elif rank is not None:
-            assert (xh1t is None) and (xh2t is None) and (sphr is None)
-            real_regime = 'rank'
-        elif sphr is not None:
-            assert (xh1t is None) and (xh2t is None) and (rank is None)
-            real_regime = 'sphere'
-        else:
-            real_regime = 'none'
-        # Data Filling
         N = filted[0].raw.shape[0]
         Z = np.empty((N,0), dtype = float)
         W = np.empty((N,0), dtype = int)
-        cats = np.empty((0), dtype = int)
-        if real_regime == 'threshold':
+        cats = np.array([], dtype = int)
+        # Regime Checking, Parsing
+        if (xh1t is not None) or (xh2t is not None):
+            assert (rank is None) and (sphr is None)
+            real_regime = 'threshold'
+            # Fill threshold
             if xh1t is not None:
                 Z = np.hstack((Z, xh1t.Z))
             if xh2t is not None:
@@ -593,16 +586,25 @@ class Data(DataBase):
                 I = cluster_max_row_ids(R)
             else:
                 I = np.where(R >= 1)[0]
-        elif real_regime == 'rank':
+        elif rank is not None:
+            assert (xh1t is None) and (xh2t is None) and (sphr is None)
+            real_regime = 'rank'
+            # Fill rank transformed
             Z = np.hstack((Z, rank.Z))
             R = Z.max(axis = 1)
             V = Z / R[:,None]
             V[V < EPS] = EPS
             I = np.arange(N)
-        elif real_regime == 'sphr':
+        elif sphr is not None:
+            assert (xh1t is None) and (xh2t is None) and (rank is None)
+            real_regime = 'sphere'
+            # Fill sphere
             V = sphr.V
+            R = np.repeat(1., N)
             I = np.arange(N)
         else:
+            real_regime = 'none'
+            # Fill none
             V = np.empty((N, 0), dtype = float)
             R = np.repeat(1., N)
             I = np.arange(N)
@@ -739,7 +741,7 @@ class Data(DataBase):
         self.iCat = iCat
         self.dCat = dCat
         self.dcls = dcls
-        self.nCol = Z.shape[1]
+        self.nCol = V.shape[1]
         self.nDat = self.I.shape[0]
         return
 
