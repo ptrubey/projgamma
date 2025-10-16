@@ -29,6 +29,10 @@ class Samples(SamplesBase):
     zeta  : deque[npt.NDArray[np.float64]] | npt.NDArray[np.float64] # shape parameter (inferred)
     
     def to_dict(self) -> dict:
+        """
+        Samples.to_dict():
+            Creates a dictionary object of the current Samples state.
+        """
         out = {
             'r'     : np.stack(self.r),
             'chi'   : np.stack(self.chi),
@@ -41,6 +45,14 @@ class Samples(SamplesBase):
     
     @classmethod
     def from_meta(cls, nkeep : int, N : int, S : int, J : int) -> Self:
+        """
+        Samples normal initialization routine.
+        args:
+            nkeep: number of kept samples
+            N: number of observations
+            S: number of dimensions
+            J: maximum number of extant clusters
+        """
         r     = deque([], maxlen = nkeep)
         chi   = deque([], maxlen = nkeep)
         delta = deque([], maxlen = nkeep)
@@ -79,6 +91,20 @@ def grad_resgamgam_ln(
         b       : npt.NDArray[np.float64] | float,  # hierarchical rate      # (d) or float
         ns      : int = 20,
         ) -> npt.NDArray[np.float64]:
+    """
+    grad_resgamgam_ln(...):
+        gradient for distributional parameters of shape parameter (log-scale), 
+            for gamma data with gamma prior on shape, where rate := 1.
+    args:
+        theta : distributional parameters for shape parameter (mu, tau)
+        lYs   : log(Y) summed
+        Ys    : Y summed
+        n     : number of observations of Y
+        a,b   : hierarchical shape parameters (for gamma prior on shape)
+        ns    : number of samples per iteration
+    output:
+        dtheta: gradient of objective at theta... returning mean of ns samples.
+    """
     epsilon = normal(size = (ns, *theta.shape[1:]))
     ete     = np.exp(theta[1]) * epsilon
     alpha   = np.exp(theta[0] + ete)
@@ -99,13 +125,29 @@ def grad_gamgam_ln(
         theta   : npt.NDArray[np.float64],  # np.stack((mu, tau))
         lYs     : npt.NDArray[np.float64],  # sum of log(Y)
         Ys      : npt.NDArray[np.float64],  # sum of Y
-        n       : npt.NDArray[np.int32],  # number of observations
+        n       : npt.NDArray[np.int32],    # number of observations
         a       : npt.NDArray[np.float64],  # hierarchical (shape) shape 
         b       : npt.NDArray[np.float64],  # hierarchical (shape) rate
         c       : npt.NDArray[np.float64],  # hierarchical (rate) shape
         d       : npt.NDArray[np.float64],  # hierarchical (rate) rate
         ns      : int = 10,
         ) -> npt.NDArray[np.float64]:
+    """
+    grad_gamgam_ln(...):
+        gradient for distributional parameters of shape parameter (log-scale), 
+            for gamma data with gamma priors on shape, rate, where where rate 
+            parameter has been integrated out.
+    args:
+        theta : distributional parameters for shape parameter (mu, tau)
+        lYs   : log(Y) summed
+        Ys    : Y summed
+        n     : number of observations of Y
+        a,b   : hierarchical shape parameters (for gamma prior on shape)
+        c,d   : hierarchical rate parameters (for gamma prior on rate)
+        ns    : number of samples per iteration
+    output:
+        dtheta: gradient of objective at theta... returning mean of ns samples.
+    """
     epsilon = normal(size = (ns, *theta.shape[1:]))
     ete    = np.exp(theta[1]) * epsilon
     alpha  = np.exp(theta[0] + ete)
@@ -139,6 +181,13 @@ class VariationalParameters(VariationalBase):
     
     @classmethod
     def from_meta(cls, S : int, J : int, **kwargs) -> Self:
+        """
+        Initialization of Variational Parameters from meta-information
+        ---
+        args:
+            S : number of dimensions
+            J : Max number of extant clusters
+        """
         logzeta_mutau = np.zeros((2, J, S))
         logalpha_mutau = np.zeros((2, S))
         logzeta = Adam.from_meta(logzeta_mutau, **kwargs)
@@ -147,6 +196,11 @@ class VariationalParameters(VariationalBase):
 
     @classmethod
     def from_dict(cls, out : dict) -> Self:
+        """
+        Initialization of Variational Parameters from dictionary
+        args:
+            out (output of VariationalParameters.to_dict())
+        """
         logzeta = Adam.from_dict(out['logzeta'])
         logalpha = Adam.from_dict(out['logalpha'])
         return cls(logzeta = logzeta, logalpha = logalpha)
