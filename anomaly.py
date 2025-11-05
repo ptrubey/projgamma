@@ -24,14 +24,14 @@ from sklearn.ensemble import IsolationForest
 from sklearn.neighbors import LocalOutlierFactor
 from sklearn.svm import OneClassSVM
 # Custom Modules
-from .data import Projection, category_matrix, euclidean_to_catprob,             \
+from .data import Projection, category_matrix, euclidean_to_catprob,            \
     euclidean_to_hypercube, euclidean_to_psphere
-from .energy import limit_cpu, kde_per_obs, manhattan_distance_matrix,           \
+from .energy import limit_cpu, kde_per_obs, manhattan_distance_matrix,          \
     hypercube_distance_matrix, euclidean_distance_matrix,                       \
     euclidean_dmat_per_obs, hypercube_dmat_per_obs, manhattan_dmat_per_obs,     \
     mixed_energy_score, real_energy_score, simp_energy_score,                   \
     multi_kde_per_obs
-from .densities import pt_logd_cumdircategorical_mx_ma, pt_logd_dirichlet_mx_ma, \
+from .densities import pt_logd_cumdircategorical_mx_ma, pt_logd_dirichlet_mx_ma,\
     pt_logd_pareto_mx_ma
 from .samplers import bincount2D_vectorized, SamplesBase
 np.seterr(divide = 'ignore')
