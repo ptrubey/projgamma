@@ -1,10 +1,56 @@
 import numpy as np
+import numpy.typing as npt
 import psutil
 import os
 from multiprocessing import Pool, cpu_count, pool as mcpool
 from itertools import repeat
 from sklearn.metrics import pairwise_distances
 from .hypercube_deviance import hcdev
+
+def _hypercube_distance(
+        postpred : npt.NDArray[np.float64], 
+        target : npt.NDArray[np.float64],
+        ) -> npt.NDArray[np.float64]:
+    """
+    hypercube distance between a postpred dataset, and a single target observation.
+
+    returns np.ndarray[np.float64] of length N (number of replicates in postpred)
+    """
+    assert len(postpred.shape) == 2
+    assert len(target.shape) == 1
+    assert target.shape[0] == postpred.shape[-1]
+    N,D = postpred.shape
+    shifted_target = np.empty((N,D))
+    shifted_target[:] = target
+    ppmax_idx = postpred.argmax(axis = 1)
+    tgmax_idx = target.argmax()
+    shifted_target[np.arange(N), tgmax_idx] = 2 - shifted_target[np.arange(N), ppmax_idx]
+    shifted_target[np.arange(N), ppmax_idx] = 1.
+    result = np.zeros(postpred.shape)
+    result[:] += postpred
+    result[:] -= shifted_target
+    result[:] *= result
+    return np.sqrt(result.sum(axis = 1)).mean()
+
+def energy_score_hypercube(
+        postpred : npt.NDArray[np.float64], 
+        target : npt.NDArray[np.float64],
+        ) -> float:
+    """
+    Calculates the energy score metric between a posterior predictive dataset (postpred) and
+    a target dataset (target), when both datasets are on S_{inf} (unit hypercube)
+    """
+    assert all([len(ds.shape) == 2 for ds in (postpred, target)]) # verify both are two-dimensional
+    assert postpred.shape[-1] == target.shape[-1] # verify both have the same number of columns
+    assert all([np.all(np.isclose(ds.max(axis = 1), 1)) for ds in (postpred, target)]) # verify both S_inf
+    N1, N2 = postpred.shape[0], target.shape[0]
+    within = np.zeros(N1)
+    between = np.zeros(N2)
+    for n in range(N1):
+        within[n] = _hypercube_distance(postpred, postpred[n])
+    for n in range(N2):
+        between[n] = _hypercube_distance(postpred, target[n])
+    return between.mean() - 0.5 * within.mean()
 
 def hypercube_distance_unsummed(args):
     return pairwise_distances(args[0], args[1].reshape(1,-1), metric = hcdev)
@@ -78,8 +124,12 @@ def postpred_loss_full(predictions, targets):
     pdev2 = ((targets - predictions.mean(axis = 0))**2).sum(axis = 1).mean()
     return pvari + pdev2
 
-def energy_score_full_sc(predictions, targets):
+def energy_score_full_sc(predictions, targets, verbose = False):
+    if verbose:
+        print('Replicate Internal Distance')
     res1 = prediction_pairwise_distance(predictions)
+    if verbose:
+        print('Replicate to Original Distance')
     res2 = map(target_pairwise_distance, zip(repeat(predictions), targets))
     return np.array(list(res2)).mean() - 0.5 * res1
 
